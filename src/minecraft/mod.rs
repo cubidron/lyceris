@@ -1,7 +1,10 @@
 use directories::BaseDirs;
 use once_cell::sync::Lazy;
-use std::{collections::HashSet, os::windows::process::CommandExt, process::Stdio};
+use std::{collections::HashSet, os::unix::fs::PermissionsExt, process::Stdio};
 use tokio::{fs::File, io::AsyncWriteExt,process::{Child, Command}};
+
+#[cfg(target_os = "windows")]
+use os::windows::process::CommandExt;
 
 use crate::{
     error::Error,
@@ -291,9 +294,9 @@ impl<R: Reporter> Launcher<R> {
 
         downloader.download_natives().await?;
         
-        downloader.download_custom().await?;
+        // downloader.download_custom().await?;
 
-        self.validate()?;
+        // self.validate()?;
 
         self.java_path = downloader.download_java().await?;
 
@@ -471,16 +474,39 @@ impl<R: Reporter> Launcher<R> {
         jvm.append(&mut game);
         self.reporter
             .send(Case::SetMessage("Oyun başlatılıyor".to_string()));
-        let child = Command::new(self.java_path.join("bin").join("java.exe"))
+
+        // `creation_flags` method avoids console window.
+        #[cfg(target_os = "windows")]{
+            let child = Command::new(self.java_path.join("bin").join("java.exe"))
             .current_dir(self.root_path)
             .args(jvm)
             .stdout(Stdio::piped())
             .creation_flags(0x08000000)
             .spawn()
             .expect("Failed to launch game");
+
+            self.reporter.send(Case::RemoveProgress);
+            Ok(child)
+        }
         
-        self.reporter.send(Case::RemoveProgress);
-        Ok(child)
+
+        #[cfg(any(target_os = "linux", target_os = "macos"))]{
+            let path = self.java_path.join("bin").join("java");
+            let mut perms = fs::metadata(&path)?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&path, perms)?;
+            let child = Command::new(path)
+                .current_dir(self.root_path)
+                .args(jvm)
+                .stdout(Stdio::piped())
+                .spawn()
+                .expect("Failed to launch game");
+
+            self.reporter.send(Case::RemoveProgress);
+            Ok(child)
+        }
+        
+        
     }
     
     async fn get_classpaths(&self) -> Result<String> {
