@@ -11,3 +11,42 @@ pub mod network;
 mod prelude;
 pub mod reporter;
 pub mod utils;
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use tokio::io::AsyncBufReadExt;
+    use tokio::{
+        io::{AsyncWriteExt, BufReader},
+        test,
+    };
+
+    use crate::{
+        minecraft::{version::MinecraftVersion, Launcher},
+        reporter::Reporter,
+    };
+    #[derive(Clone)]
+    struct TestReporter {}
+
+    impl Reporter for TestReporter {
+        fn send(&self, case: crate::reporter::Case) {
+            println!("{:?}", case);
+        }
+    }
+    #[test]
+    async fn test_launch() {
+        let mut launcher: Launcher<TestReporter> = Launcher::new(
+            PathBuf::from("../game"),
+            MinecraftVersion::Release((1, 20, Some(1))),
+        )
+        .with_reporter(TestReporter {});
+        let mut p = launcher.launch().await.unwrap();
+        let stdout = p.stdout.take().expect("no stdout");
+
+        let mut lines = BufReader::new(stdout).lines();
+        while let Some(line) = lines.next_line().await.unwrap() {
+            println!("{}", line)
+        }
+    }
+}
