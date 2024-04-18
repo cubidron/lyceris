@@ -122,6 +122,7 @@ impl Index<&str> for JavaRuntime{
         match index {
             "gamecore" => &self.gamecore,
             "linux" => &self.linux,
+            "linux-x64" => &self.linux,
             "linux-i386" => &self.linux_i386,
             "mac-os" => &self.mac_os,
             "mac-os-arm64" => &self.mac_os_arm64,
