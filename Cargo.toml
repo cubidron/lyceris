@@ -1,5 +1,5 @@
 [package]
-name = "cardinal_core"
+name = "lyceris"
 version = "0.1.0"
 edition = "2021"
 include = ["/tests/**"]
