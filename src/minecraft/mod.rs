@@ -1,10 +1,13 @@
 use directories::BaseDirs;
 use once_cell::sync::Lazy;
-use std::{collections::HashSet, os::unix::fs::PermissionsExt, process::Stdio};
+use std::{collections::HashSet, process::Stdio};
 use tokio::{fs::File, io::AsyncWriteExt,process::{Child, Command}};
 
 #[cfg(target_os = "windows")]
-use os::windows::process::CommandExt;
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::PermissionsExt;
 
 use crate::{
     error::Error,
