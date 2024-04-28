@@ -7,19 +7,15 @@ use serde::Deserialize;
 use tokio::fs;
 
 use crate::{
-    minecraft::java::{detect_java_by_cmd, get_manifest_by_version},
-    network::Network,
-    prelude::Result,
-    reporter::Reporter,
-    utils::{extract_zip, hash_file, hash_file_sha256, hash_files, json_from_file},
+    minecraft::java::{detect_java_by_cmd, get_manifest_by_version}, network::download_retry, prelude::{Result, R}, reporter::Reporter, utils::{extract_zip, hash_file, hash_file_sha256, hash_files, json_from_file}
 };
 
 use super::{
-    custom::CustomPackage, serde::{Action, Index, Library, Name}, Case, Launcher, LAUNCHER_API, NETWORK as n
+    custom::CustomPackage, serde::{Action, Index, Library, Name}, Case, Launcher, LAUNCHER_API
 };
 
-pub struct Downloader<'life1, R: Reporter> {
-    pub launcher: &'life1 Launcher<R>,
+pub struct Downloader<'a> {
+    pub launcher: &'a Launcher,
 }
 
 pub struct File {
@@ -36,13 +32,13 @@ pub struct ServerFile {
     pub sha256: String,
 }
 
-impl<'life1, R: Reporter> Downloader<'life1, R> {
-    pub fn new(launcher: &'life1 Launcher<R>) -> Downloader<'life1, R> {
+impl<'a> Downloader<'a> {
+    pub fn new(launcher: &'a Launcher) -> Downloader {
         Self { launcher }
     }
 
     pub async fn download_assets(&self) -> Result<()> {
-        self.launcher.reporter.send(Case::SetMessage(
+        R.send(Case::SetMessage(
             "Kaynak dosyaları kontrol ediliyor".to_string(),
         ));
 
@@ -78,18 +74,18 @@ impl<'life1, R: Reporter> Downloader<'life1, R> {
                     path: hash_path,
                 });
             } else {
-                self.launcher.reporter.send(Case::SetMessage(
+                R.send(Case::SetMessage(
                     "Eksik kaynak dosyaları yükleniyor".to_string(),
                 ));
-                n.download_with_retry(
+                download_retry(
                     format!(
                         "https://resources.download.minecraft.net/{sub_hash}/{}",
                         object.hash
                     ),
-                    &hash_path,
+                    &hash_path
                 )
                 .await?;
-                self.launcher.reporter.send(Case::AddProgress(1.0));
+                R.send(Case::AddProgress(1.0));
             }
         }
 
@@ -97,17 +93,16 @@ impl<'life1, R: Reporter> Downloader<'life1, R> {
 
         for file in hashes {
             if !file.state {
-                n.download_with_retry(&file.url, &file.path).await;
+                download_retry(&file.url, &file.path).await;
             }
-            self.launcher.reporter.send(Case::AddProgress(1.0));
+            R.send(Case::AddProgress(1.0));
         }
 
         Ok(())
     }
 
     pub async fn download_client(&self) -> Result<()> {
-        self.launcher
-            .reporter
+        R
             .send(Case::SetMessage("İstemci kontrol ediliyor".to_string()));
         let file_path = self
             .launcher
@@ -119,17 +114,16 @@ impl<'life1, R: Reporter> Downloader<'life1, R> {
         if file_path.is_file()
             && hash_file(&file_path)? == self.launcher.config.package.downloads.client.sha1
         {
-            self.launcher.reporter.send(Case::AddProgress(1.0));
+            R.send(Case::AddProgress(1.0));
             return Ok(());
         }
 
-        self.launcher
-            .reporter
+        R
             .send(Case::SetMessage("İstemci yükleniyor".to_string()));
 
-        n.download_with_retry(
+            download_retry(
             self.launcher.config.package.downloads.client.url.clone(),
-            file_path,
+            &file_path,
         )
         .await?;
 
@@ -151,7 +145,7 @@ impl<'life1, R: Reporter> Downloader<'life1, R> {
     }
 
     pub async fn download_libraries(&self) -> Result<()> {
-        self.launcher.reporter.send(Case::SetMessage(
+        R.send(Case::SetMessage(
             "Kütüphaneler kontrol ediliyor".to_string(),
         ));
 
@@ -166,19 +160,19 @@ impl<'life1, R: Reporter> Downloader<'life1, R> {
                 if !self.launcher.parse_rule(lib)
                     && (!file_path.is_file() || hash_file(&file_path)? != artifact.sha1)
                 {
-                    self.launcher.reporter.send(Case::SetMessage(
+                    R.send(Case::SetMessage(
                         "Eksik kütüphaneler yükleniyor".to_string(),
                     ));
-                    n.download_with_retry(&artifact.url, &file_path).await?;
+                    download_retry(&artifact.url, &file_path).await?;
                 }
             }
-            self.launcher.reporter.send(Case::AddProgress(1.0));
+            R.send(Case::AddProgress(1.0));
         }
 
         if let Some(package) = &self.launcher.config.custom {
             match package {
                 CustomPackage::Fabric(package) => {
-                    self.launcher.reporter.send(Case::SetMessage(
+                    R.send(Case::SetMessage(
                         "Fabric dosyaları kontrol ediliyor".to_string(),
                     ));
                     let mut progress = 0f64;
@@ -203,16 +197,16 @@ impl<'life1, R: Reporter> Downloader<'life1, R> {
                             .join(&file_name);
 
                         if !path.is_file() {
-                            self.launcher.reporter.send(Case::SetMessage(
+                            R.send(Case::SetMessage(
                                 "Eksik fabric dosyaları yükleniyor".to_string(),
                             ));
-                            n.download_with_retry(&url, &path).await?;
+                            download_retry(&url, &path).await?;
                         } else if let Some(sha1) = &i.sha1 {
                             if &hash_file(&path)? != sha1 {
-                                n.download_with_retry(&url, &path).await?;
+                                download_retry(&url, &path).await?;
                             }
                         }
-                        self.launcher.reporter.send(Case::AddProgress(1.0));
+                        R.send(Case::AddProgress(1.0));
                     }
                 }
             }
@@ -222,7 +216,7 @@ impl<'life1, R: Reporter> Downloader<'life1, R> {
 
     pub async fn download_natives(&self) -> Result<()> {
         let mut classifier_url = String::new();
-        self.launcher.reporter.send(Case::SetMessage(
+        R.send(Case::SetMessage(
             "Native dosyaları kontrol ediliyor".to_string(),
         ));
         let natives_path = self
@@ -258,21 +252,20 @@ impl<'life1, R: Reporter> Downloader<'life1, R> {
             if !classifier_url.is_empty() {
                 fs::create_dir_all(&natives_path);
                 let native_file = natives_path.join("native.jar");
-                self.launcher
-                    .reporter
+                R
                     .send(Case::SetMessage("Native dosyaları yükleniyor".to_string()));
-                n.download_with_retry(&classifier_url, &native_file).await?;
+                download_retry(&classifier_url, &native_file).await?;
                 extract_zip(&native_file, &natives_path)?;
                 fs::remove_file(native_file).await?;
             }
-            self.launcher.reporter.send(Case::AddProgress(1.0));
+            R.send(Case::AddProgress(1.0));
         }
 
         Ok(())
     }
 
     pub async fn download_custom(&self) -> Result<()> {
-        self.launcher.reporter.send(crate::reporter::Case::SetMessage(
+        R.send(crate::reporter::Case::SetMessage(
             "Özel dosyalar kontrol ediliyor".to_string(),
         ));
 
@@ -283,20 +276,20 @@ impl<'life1, R: Reporter> Downloader<'life1, R> {
                 let optional_file_path = self.launcher.root_path.join(format!("{}.deactive",&remote_path));
                 let url = format!("{}/api/files/{}", LAUNCHER_API, remote_path);
                 if (!file_path.is_file() && !optional_file_path.is_file()) {
-                    n.download_with_retry(url, file_path).await?;
+                    download_retry(url, &file_path).await?;
                 }else if(file_path.is_file() && !hash_file_sha256(&file_path)?.eq(&file.sha256)){
-                    n.download_with_retry(url, file_path).await?;
+                    download_retry(url, &file_path).await?;
                 }else if(optional_file_path.is_file() && !hash_file_sha256(&optional_file_path)?.eq(&file.sha256)){
-                    n.download_with_retry(url, file_path).await?;
+                    download_retry(url, &file_path).await?;
                 }
-                self.launcher.reporter.send(crate::reporter::Case::AddProgress(1.0));
+                R.send(crate::reporter::Case::AddProgress(1.0));
             }
         }
         Ok(())
     }
 
     pub async fn download_java(&self) -> Result<PathBuf> {
-        self.launcher.reporter.send(Case::SetMessage(
+        R.send(Case::SetMessage(
             "Java dosyaları kontrol ediliyor".to_string(),
         ));
         let manifest = get_manifest_by_version(&self.launcher.java_version).await?;
@@ -308,15 +301,15 @@ impl<'life1, R: Reporter> Downloader<'life1, R> {
             let path = java_path.join(name);
             if let Some(downloads) = file.downloads {
                 if path.is_file() && hash_file(&path)? == downloads.raw.sha1 {
-                    self.launcher.reporter.send(Case::AddProgress(1.0));
+                    R.send(Case::AddProgress(1.0));
                     continue;
                 }
-                self.launcher.reporter.send(Case::SetMessage(
+                R.send(Case::SetMessage(
                     "Eksik java dosyaları yükleniyor".to_string(),
                 ));
-                n.download_with_retry(&downloads.raw.url, &path).await?;
+                download_retry(&downloads.raw.url, &path).await?;
             }
-            self.launcher.reporter.send(Case::AddProgress(1.0));
+            R.send(Case::AddProgress(1.0));
         }
 
         Ok(java_path)

@@ -1,7 +1,12 @@
 use directories::BaseDirs;
+use futures_util::join;
 use once_cell::sync::Lazy;
 use std::{collections::HashSet, process::Stdio};
-use tokio::{fs::File, io::AsyncWriteExt,process::{Child, Command}};
+use tokio::{
+    fs::File,
+    io::AsyncWriteExt,
+    process::{Child, Command},
+};
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -12,8 +17,8 @@ use std::os::unix::fs::PermissionsExt;
 use crate::{
     error::Error,
     minecraft::{auth::AuthMethod, custom::fabric::get_package_by_version, version::ToString},
-    network::Network,
-    prelude::{Result, CLASSPATH_SEPERATOR},
+    network::{download_retry, get, get_json},
+    prelude::{Result, CLASSPATH_SEPERATOR, R},
     reporter::{Case, Reporter},
     utils::{json_from_file, recurse_files},
 };
@@ -43,18 +48,7 @@ pub mod java;
 pub mod serde;
 pub mod version;
 
-#[derive(Clone)]
-
-pub struct ProgressionReporter {}
-
-impl Reporter for ProgressionReporter {
-    fn send(&self, case: crate::reporter::Case) {}
-}
-
 pub const LAUNCHER_API: &str = "https://launcher.baso.network";
-
-pub static NETWORK: Lazy<Network<ProgressionReporter>> =
-    Lazy::new(|| Network::default().with_reporter(ProgressionReporter {}));
 
 static DIRECTORY_STRUCTURE: Lazy<Vec<&str>> = Lazy::new(|| {
     Vec::from([
@@ -72,7 +66,7 @@ static DIRECTORY_STRUCTURE: Lazy<Vec<&str>> = Lazy::new(|| {
     ])
 });
 
-static WHITELIST : Lazy<Vec<&str>> = Lazy::new(||{
+static WHITELIST: Lazy<Vec<&str>> = Lazy::new(|| {
     Vec::from([
         "assets",
         "libraries",
@@ -96,7 +90,7 @@ static WHITELIST : Lazy<Vec<&str>> = Lazy::new(||{
         "server-resource-packs",
     ])
 });
-pub struct Launcher<R: Reporter> {
+pub struct Launcher {
     // Authentication method.
     pub authentication: AuthMethod,
     // Root directory of Minecraft files. Example : %APPDATA%/.minecraft
@@ -117,19 +111,16 @@ pub struct Launcher<R: Reporter> {
     pub custom_launch_args: Vec<String>,
     // Config for storing config parameters.
     pub config: Config,
-    // Reporter for progression.
-    pub reporter: Option<R>,
 }
 
-impl<R: Reporter> Launcher<R> {
+impl Launcher {
     // A new function to generate the structer.
     // It will use 2 GB maximum and minimum memory and Cardinal as username.
     // ! IMPROVE INITIALIZATION.
     pub fn new(root_path: PathBuf, version: MinecraftVersion) -> Self {
         // Todo OS Support
         // Tries to get java path by the Java CLI, if can't it will use {root_path}/runtime/{java_version}/bin/java.exe
-        let java_path: PathBuf = root_path
-            .join("runtime");
+        let java_path: PathBuf = root_path.join("runtime");
 
         if root_path.is_dir() {
             fs::create_dir_all(&root_path);
@@ -159,12 +150,11 @@ impl<R: Reporter> Launcher<R> {
             custom_java_args: vec![],
             custom_launch_args: vec![],
             config: Config::default(),
-            reporter: None,
         }
     }
     pub async fn initialize_config(mut self) -> Result<Self> {
-        self.reporter.send(Case::SetMessage(
-            "Minecraft sürüm bilgileri yükleniyor".to_string()
+        R.send(Case::SetMessage(
+            "Minecraft sürüm bilgileri yükleniyor".to_string(),
         ));
 
         // If package id is default that means config has not been initialized yet.
@@ -179,11 +169,9 @@ impl<R: Reporter> Launcher<R> {
             let version_manifest = if version_manifest_path.is_file() {
                 json_from_file(version_manifest_path)?
             } else {
-                let manifest = NETWORK
-                    .get_json::<VersionManifest>(VERSION_MANIFEST_URL)
-                    .await?;
+                let manifest = get_json::<VersionManifest>(VERSION_MANIFEST_URL).await?;
                 let mut file = File::create(&version_manifest_path).await?;
-                self.reporter.send(Case::SetSubMessage(format!(
+                R.send(Case::SetSubMessage(format!(
                     "Saving manifest file at {}",
                     version_manifest_path.display()
                 )));
@@ -192,18 +180,17 @@ impl<R: Reporter> Launcher<R> {
                 manifest
             };
             // Taking the package by filtering version_manifest.versions
-            let package = NETWORK
-                .get_json(
-                    &version_manifest
-                        .clone()
-                        .versions
-                        .into_iter()
-                        .filter(|x| x.version_type == self.version.get_type())
-                        .find(|x| x.id == self.version.to_string())
-                        .unwrap()
-                        .url,
-                )
-                .await?;
+            let package = get_json(
+                &version_manifest
+                    .clone()
+                    .versions
+                    .into_iter()
+                    .filter(|x| x.version_type == self.version.get_type())
+                    .find(|x| x.id == self.version.to_string())
+                    .unwrap()
+                    .url,
+            )
+            .await?;
             match self.version.clone() {
                 MinecraftVersion::Custom(ext) => match ext {
                     version::Custom::Fabric(version) => {
@@ -256,7 +243,7 @@ impl<R: Reporter> Launcher<R> {
                     }
                 },
                 _ => {
-                    self.config = Config::new(version_manifest, package, None, None, None,None);
+                    self.config = Config::new(version_manifest, package, None, None, None, None);
                 }
             }
         }
@@ -268,15 +255,13 @@ impl<R: Reporter> Launcher<R> {
         let index: Index = if index_path.is_file() {
             json_from_file::<Index>(index_path)?
         } else {
-            NETWORK.download_with_retry(&self.config.package.asset_index.url, &index_path)
-                .await?;
+            download_retry(&self.config.package.asset_index.url, &index_path).await?;
             json_from_file::<Index>(index_path)?
         };
-        let server_files = NETWORK
-            .get_json::<Vec<ServerFile>>(format!("{}/api/files", LAUNCHER_API))
-            .await?;
+        let server_files =
+            get_json::<Vec<ServerFile>>(format!("{}/api/files", LAUNCHER_API)).await?;
         self.config.server_files = Some(server_files);
-        
+
         self.config.index = Some(index);
 
         Ok(self)
@@ -285,21 +270,18 @@ impl<R: Reporter> Launcher<R> {
     pub async fn launch(mut self) -> Result<Child> {
         self = self.initialize_config().await?;
 
-        self.reporter
-            .send(Case::SetMaxProgress(self.config.get_global_progress().await?));
+        R.send(Case::SetMaxProgress(
+            self.config.get_global_progress().await?,
+        ));
 
         let mut downloader = Downloader::new(&self);
-        downloader.download_assets().await?;
 
-        downloader.download_libraries().await?;
-
-        downloader.download_client().await?;
-
-        downloader.download_natives().await?;
-        
-        // downloader.download_custom().await?;
-
-        // self.validate()?;
+        join!(
+            downloader.download_assets(),
+            downloader.download_libraries(),
+            downloader.download_client(),
+            downloader.download_natives()
+        );
 
         self.java_path = downloader.download_java().await?;
 
@@ -318,33 +300,24 @@ impl<R: Reporter> Launcher<R> {
 
         let classpaths = self.get_classpaths().await?;
 
-        self.reporter
-            .send(Case::SetMessage("Argümanlar ayarlanıyor".to_string()));
+        R.send(Case::SetMessage("Argümanlar ayarlanıyor".to_string()));
 
         match self.config.package.arguments {
             Some(arguments) => {
                 let username = match &self.authentication {
-                    AuthMethod::Offline(offline_user) => {
-                        offline_user.username.to_string()
-                    }
+                    AuthMethod::Offline(offline_user) => offline_user.username.to_string(),
                     _ => unimplemented!(), //AuthMethod::Online(microsoft_user) => microsoft_user.username,
                 };
                 for argument in arguments.game {
-                    if let GameElement::String(string) = argument{
+                    if let GameElement::String(string) = argument {
                         game.push(match string.as_str() {
                             // todo authentication
                             "${auth_player_name}" => username.clone(),
                             "${version_name}" => self.version_name.clone(),
                             "${game_directory}" => self.root_path.display().to_string(),
-                            "${assets_root}" => {
-                                self.root_path.join("assets").display().to_string()
-                            }
-                            "${assets_index_name}" => {
-                                self.config.package.asset_index.id.clone()
-                            }
-                            "${auth_uuid}" => {
-                                "bc58f189-ef1a-4bca-9e4f-e047ee4432be".to_string()
-                            }
+                            "${assets_root}" => self.root_path.join("assets").display().to_string(),
+                            "${assets_index_name}" => self.config.package.asset_index.id.clone(),
+                            "${auth_uuid}" => "bc58f189-ef1a-4bca-9e4f-e047ee4432be".to_string(),
                             "${auth_access_token}" => "123".to_string(),
                             "${clientid}" => "123".to_string(),
                             "${auth_xuid}" => "123".to_string(),
@@ -355,7 +328,7 @@ impl<R: Reporter> Launcher<R> {
                     }
                 }
                 for argument in arguments.jvm {
-                    if let serde::JvmElement::String(mut string) = argument{
+                    if let serde::JvmElement::String(mut string) = argument {
                         if string.contains("${natives_directory}") {
                             string = string.replace(
                                 "${natives_directory}",
@@ -475,25 +448,25 @@ impl<R: Reporter> Launcher<R> {
         }
 
         jvm.append(&mut game);
-        self.reporter
-            .send(Case::SetMessage("Oyun başlatılıyor".to_string()));
+        R.send(Case::SetMessage("Oyun başlatılıyor".to_string()));
 
         // `creation_flags` method avoids console window.
-        #[cfg(target_os = "windows")]{
+        #[cfg(target_os = "windows")]
+        {
             let child = Command::new(self.java_path.join("bin").join("java.exe"))
-            .current_dir(self.root_path)
-            .args(jvm)
-            .stdout(Stdio::piped())
-            .creation_flags(0x08000000)
-            .spawn()
-            .expect("Failed to launch game");
+                .current_dir(self.root_path)
+                .args(jvm)
+                .stdout(Stdio::piped())
+                .creation_flags(0x08000000)
+                .spawn()
+                .expect("Failed to launch game");
 
             self.reporter.send(Case::RemoveProgress);
             Ok(child)
         }
-        
 
-        #[cfg(any(target_os = "linux", target_os = "macos"))]{
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        {
             let path = self.java_path.join("bin").join("java");
             let mut perms = fs::metadata(&path)?.permissions();
             perms.set_mode(0o755);
@@ -505,13 +478,11 @@ impl<R: Reporter> Launcher<R> {
                 .spawn()
                 .expect("Failed to launch game");
 
-            self.reporter.send(Case::RemoveProgress);
+            R.send(Case::RemoveProgress);
             Ok(child)
         }
-        
-        
     }
-    
+
     async fn get_classpaths(&self) -> Result<String> {
         if let Some(cp) = &self.config.classpaths {
             return Ok(cp.to_string());
@@ -519,8 +490,7 @@ impl<R: Reporter> Launcher<R> {
 
         let mut cp = String::new();
 
-        self.reporter
-            .send(Case::SetMessage("Sınıf yolları ayarlanıyor".to_string()));
+        R.send(Case::SetMessage("Sınıf yolları ayarlanıyor".to_string()));
 
         // Iterating through package libraries to find classpaths.
         for lib in &self.config.package.libraries {
@@ -566,7 +536,7 @@ impl<R: Reporter> Launcher<R> {
                     );
                 }
             }
-            self.reporter.send(Case::AddProgress(1.0));
+            R.send(Case::AddProgress(1.0));
         }
 
         if let Some(package) = &self.config.custom {
@@ -591,7 +561,7 @@ impl<R: Reporter> Launcher<R> {
                             .join(parts[2])
                             .join(&file_name);
                         cp.push_str(format!("{};", path.display()).as_str());
-                        self.reporter.send(Case::AddProgress(1.0));
+                        R.send(Case::AddProgress(1.0));
                     }
                 }
             }
@@ -611,24 +581,31 @@ impl<R: Reporter> Launcher<R> {
         }
     }
 
-    pub fn validate(&self) -> Result<()>{
-        if let Some(files) = &self.config.server_files{
-            let files = files.iter().map(|f| self.root_path.join(f.path.replace("\\root\\baso-api\\files\\",""))).collect::<HashSet<PathBuf>>();
-            if let Ok(local) = recurse_files(&self.root_path){
-                let difference : HashSet<&PathBuf> = local.difference(&files).collect();
-                for file in difference{
+    pub fn validate(&self) -> Result<()> {
+        if let Some(files) = &self.config.server_files {
+            let files = files
+                .iter()
+                .map(|f| {
+                    self.root_path
+                        .join(f.path.replace("\\root\\baso-api\\files\\", ""))
+                })
+                .collect::<HashSet<PathBuf>>();
+            if let Ok(local) = recurse_files(&self.root_path) {
+                let difference: HashSet<&PathBuf> = local.difference(&files).collect();
+                for file in difference {
                     if WHITELIST.iter().any(|w| {
-                        if let Some(_) = PathBuf::from(w).extension(){
+                        if let Some(_) = PathBuf::from(w).extension() {
                             file.display().to_string().contains(w)
+                        } else {
+                            file.display()
+                                .to_string()
+                                .contains(format!("\\{}\\", w).as_str())
                         }
-                        else {
-                            file.display().to_string().contains(format!("\\{}\\",w).as_str())    
-                        }
-                    } ){
+                    }) {
                         continue;
                     }
-                    if let Some(ext) = file.extension(){
-                        if ext.eq("deactive"){
+                    if let Some(ext) = file.extension() {
+                        if ext.eq("deactive") {
                             continue;
                         }
                     }
@@ -661,11 +638,6 @@ impl<R: Reporter> Launcher<R> {
             }
         }
         false
-    }
-
-    pub fn with_reporter(mut self, reporter: R) -> Self {
-        self.reporter = Some(reporter);
-        self
     }
 
     pub fn with_root_path(mut self, root_path: PathBuf) -> Self {

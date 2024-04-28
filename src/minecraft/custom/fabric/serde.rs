@@ -1,8 +1,7 @@
-use serde::{Serialize,Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-
-#[derive(Serialize, Deserialize,Debug,Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Package {
     #[serde(rename = "id")]
     pub id: String,
@@ -29,7 +28,7 @@ pub struct Package {
     pub libraries: Vec<Library>,
 }
 
-#[derive(Serialize, Deserialize,Debug,Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Arguments {
     #[serde(rename = "game")]
     pub game: Vec<Option<Value>>,
@@ -38,7 +37,7 @@ pub struct Arguments {
     pub jvm: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize,Debug,Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Library {
     #[serde(rename = "name")]
     pub name: String,
@@ -105,4 +104,3 @@ pub struct Version {
     #[serde(rename = "stable")]
     pub stable: bool,
 }
-

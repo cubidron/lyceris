@@ -1,10 +1,9 @@
-use crate::network::Network;
+use crate::network::{get, get_json};
 
 use super::{
     custom::fabric::FabricVersion,
     java::JavaVersion,
-    serde::{Type, VersionManifest},
-    NETWORK,
+    serde::{Type, VersionManifest}
 };
 
 use core::fmt;
@@ -94,8 +93,8 @@ impl MinecraftVersion {
         }
     }
     async fn get_latest_version() -> Self {
-        if let Ok(manifest) = NETWORK
-            .get_json::<VersionManifest>(VERSION_MANIFEST_URL)
+        if let Ok(manifest) = 
+            get_json::<VersionManifest>(VERSION_MANIFEST_URL)
             .await
         {
             let version = manifest.latest.release.split('.').collect::<Vec<&str>>();

@@ -36,11 +36,10 @@ mod tests {
     }
     #[test]
     async fn test_launch() {
-        let mut launcher: Launcher<TestReporter> = Launcher::new(
+        let mut launcher: Launcher = Launcher::new(
             PathBuf::from("../game"),
             MinecraftVersion::Release((1, 20, Some(1))),
-        )
-        .with_reporter(TestReporter {});
+        );
         let mut p = launcher.launch().await.unwrap();
         let stdout = p.stdout.take().expect("no stdout");
 

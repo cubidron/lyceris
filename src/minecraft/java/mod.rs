@@ -1,6 +1,6 @@
 use std::{env, fmt::Display, path::{Path, PathBuf}, process::Command};
 
-use crate::{minecraft::NETWORK, prelude::Result, utils::hash_file};
+use crate::{network::get_json, prelude::Result, utils::hash_file};
 
 use self::serde::{JavaManifest, JavaRuntime};
 
@@ -92,7 +92,7 @@ pub fn detect_java_by_cmd() -> Option<JavaVersion> {
 }
 
 pub async fn get_manifest_by_version(version: &JavaVersion) -> Result<JavaManifest> {
-    let java_runtime: JavaRuntime = NETWORK.get_json::<JavaRuntime>(JAVA_RUNTIMES).await?;
+    let java_runtime: JavaRuntime = get_json::<JavaRuntime>(JAVA_RUNTIMES).await?;
 
     let os: String = if cfg!(target_os = "windows") {
         "windows".to_string()
@@ -126,7 +126,7 @@ pub async fn get_manifest_by_version(version: &JavaVersion) -> Result<JavaManife
     .manifest
     .url;
 
-    NETWORK.get_json::<JavaManifest>(url).await
+    get_json::<JavaManifest>(url).await
 }
 
 

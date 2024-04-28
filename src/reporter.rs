@@ -48,6 +48,10 @@ impl<R : Reporter> Progress for R {}
 
 pub const NR: Option<()> = None;
 
+impl Reporter for () {
+    fn send(&self, _: Case) {}
+}
+
 impl<R: Reporter> Reporter for Option<R> {
     fn send(&self, state: Case) {
         if let Some(s) = &self {
@@ -55,6 +59,7 @@ impl<R: Reporter> Reporter for Option<R> {
         }
     }
 }
+
 #[derive(Debug)]
 pub enum Case{
     SetMessage(String),
