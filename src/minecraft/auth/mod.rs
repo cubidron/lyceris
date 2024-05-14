@@ -1,10 +1,6 @@
 pub enum AuthMethod{
-    Offline(Offline),
+    Offline(String),
     Online(Online)
-}
-
-pub struct Offline{
-    pub username : String
 }
 
 pub struct Online{}
