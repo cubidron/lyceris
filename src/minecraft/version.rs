@@ -1,9 +1,10 @@
+use sha1::digest::typenum::Min;
+
 use crate::network::{get, get_json};
 
 use super::{
-    custom::fabric::FabricVersion,
-    java::JavaVersion,
-    serde::{Type, VersionManifest}
+    // custom::fabric::FabricVersion,
+    custom::{fabric::Fabric, quilt::Quilt}, java::JavaVersion, serde::{Type, VersionManifest}
 };
 
 use core::fmt;
@@ -14,7 +15,6 @@ pub static VERSION_MANIFEST_URL: &str =
 
 // Default version base. Third one is optional because some cases : 1.16, 1.15, ....
 pub type MinecraftVersionBase = (u8, u8, Option<u8>);
-
 // Using custom Display trait as an Extension for MinecraftVersionBase
 // Because Rust doesn't allow us to use default trait implementations for custom types.
 pub trait Display {
@@ -48,11 +48,13 @@ impl ToString for MinecraftVersionBase {
         )
     }
 }
+
 #[derive(Clone)]
 pub enum Custom {
-    Fabric(FabricVersion),
-    OptiFine(u8, u8, Option<u8>),
-    Forge(u8, u8, Option<u8>),
+    OptiFine(MinecraftVersionBase, String), 
+    Forge(MinecraftVersionBase, String),
+    Fabric(Fabric),
+    Quilt(Quilt)
 }
 
 // Because of the ability to filter version types in the iteration of version manifest
@@ -60,10 +62,10 @@ pub enum Custom {
 #[derive(Clone)]
 pub enum MinecraftVersion {
     Release(MinecraftVersionBase),
+    Custom(Custom),
     OldBeta(String),
     OldAlpha(String),
-    Snapshot(String),
-    Custom(Custom),
+    Snapshot(String)
 }
 
 // This implementation necessary for filtering.
@@ -74,7 +76,7 @@ impl MinecraftVersion {
             Self::OldAlpha(_) => Type::OldAlpha,
             Self::OldBeta(_) => Type::OldBeta,
             Self::Snapshot(_) => Type::Snapshot,
-            Self::Custom(_) => Type::Release,
+            _=> Type::Release
         }
     }
     pub fn get_compatible_java_version(&self) -> JavaVersion {
@@ -86,10 +88,10 @@ impl MinecraftVersion {
                     JavaVersion::Legacy
                 }
             }
+            Self::Custom(_)=> JavaVersion::Gamma,
             Self::OldAlpha(_) => JavaVersion::Legacy,
             Self::OldBeta(_) => JavaVersion::Legacy,
             Self::Snapshot(_) => JavaVersion::Legacy, // todo change in the future
-            Self::Custom(_) => JavaVersion::Gamma,
         }
     }
     async fn get_latest_version() -> Self {
@@ -116,24 +118,26 @@ impl MinecraftVersion {
 impl fmt::Display for MinecraftVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Release((v, v1, v2)) => {
-                if let Some(v2) = v2 {
-                    write!(f, "{}.{}.{}", v, v1, v2)
-                } else {
-                    write!(f, "{}.{}", v, v1)
-                }
+            Self::Release(v) => {
+                v.fmt(f)
             }
             Self::OldAlpha(v) => write!(f, "{}", v),
             Self::OldBeta(v) => write!(f, "{}", v),
             Self::Snapshot(v) => write!(f, "{}", v),
-            Self::Custom(v) => match v {
-                // Todo : change this.
-                Custom::Fabric(fabric) => fabric.version.fmt(f),
-                Custom::Forge(v, v1, v2) => {
-                    write!(f, "forge-{}.{}.{}", v, v1, v2.unwrap_or_default())
-                }
-                Custom::OptiFine(v, v1, v2) => {
-                    write!(f, "optifine-{}.{}.{}", v, v1, v2.unwrap_or_default())
+            Self::Custom(v) => {
+                match v{
+                    Custom::OptiFine(v, _)=>{
+                        v.fmt(f)
+                    },
+                    Custom::Forge(v, _)=>{
+                        v.fmt(f)
+                    },
+                    Custom::Fabric(v)=>{
+                        v.version.fmt(f)
+                    },
+                    Custom::Quilt(v)=>{
+                        v.version.fmt(f)
+                    }
                 }
             },
         }

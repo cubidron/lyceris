@@ -19,15 +19,15 @@ pub const RETRY_COUNT: u8 = 3;
 ///
 /// Uses `CARGO_PKG_NAME/CARGO_PKG_VERSION` as user agent.
 static CLIENT: Lazy<Client> = Lazy::new(|| {
-    let client = ClientBuilder::new()
+    
+    ClientBuilder::new()
         .user_agent(concat!(
             env!("CARGO_PKG_NAME"),
             "/",
             env!("CARGO_PKG_VERSION")
         ))
         .build()
-        .expect("Couldn't create the network client.");
-    client
+        .expect("Couldn't create the network client.")
 });
 
 /// Sends a GET request to the given URL.
@@ -49,7 +49,7 @@ pub async fn get_json<F: DeserializeOwned>(url: impl IntoUrl) -> Result<F> {
 }
 
 pub async fn download_retry(url: impl IntoUrl, path: &impl AsRef<Path>) -> Result<()> {
-    Ok(retry(|| download(url.as_str(), path), Result::is_ok).await?)
+    retry(|| download(url.as_str(), path), Result::is_ok).await
 }
 
 /// Download file from the given URL to the destination path.

@@ -13,7 +13,16 @@ pub static R: Lazy<ProgressionReporter> = Lazy::new(|| ProgressionReporter {});
 pub struct ProgressionReporter {}
 
 impl Reporter for ProgressionReporter {
-    fn send(&self, case: crate::reporter::Case) {}
+    fn send(&self, case: crate::reporter::Case) {
+        match case{
+            crate::reporter::Case::SetMessage(msg)=>{
+                println!("{}",msg)
+            }
+            _=>{
+                
+            }
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]

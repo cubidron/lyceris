@@ -38,7 +38,7 @@ pub fn hash_file(path: &Path) -> Result<String> {
 
 pub fn hash_file_sha256(path: &Path) -> Result<String> {
     let bytes = read(path)?;
-    let hash = sha256::digest(&bytes);
+    let hash = sha256::digest(bytes);
     Ok(hash)
 }
 

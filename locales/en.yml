@@ -1,0 +1,22 @@
+config_not_found: Can't find config directory of the operating system. Using %{path} path
+prepare: Preparing the instance
+manifest_file_save: Saving manifest file at %{path}
+resources_check: Checking resources
+resources_download_missing: Downloading missing resources
+client_check: Checking client 
+client_install: Installing client
+libraries_check: Checking libraries
+libraries_download_missing: Downloading missing libraries
+libraries_install: Installing libraries
+libraries_download_failed: Downloading libraries failed
+java_check: Checking java
+java_download_missing: Downloading java
+natives_check: Checking natives
+natives_download_missing: Downloading natives
+classpaths_set: Setting classpaths
+arguments_set: Setting arguments
+launching: Launching game
+fabric_check: Checking fabric
+fabric_download_missing: Downloading fabric
+quilt_check: Checking quilt
+quilt_download_missing: Downloading quilt

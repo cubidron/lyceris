@@ -15,10 +15,17 @@ pub enum Error{
     ZipError(#[from] ZipError),
     #[error("Fabric error occured : {0}")]
     FabricError(FabricError),
+    #[error("Quilt error occured : {0}")]
+    QuiltError(QuiltError)
 }
 
 #[derive(Debug)]
 pub enum FabricError{
+    PackageNotFound
+}
+
+#[derive(Debug)]
+pub enum QuiltError{
     PackageNotFound
 }
 
@@ -27,6 +34,16 @@ impl fmt::Display for FabricError{
         match self{
             FabricError::PackageNotFound=>{
                 write!(f,"Fabric package not found")
+            }
+        }
+    }
+}
+
+impl fmt::Display for QuiltError{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self{
+            QuiltError::PackageNotFound=>{
+                write!(f,"Quilt package not found")
             }
         }
     }
