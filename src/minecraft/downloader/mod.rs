@@ -14,7 +14,11 @@ use crate::{
     utils::{extract_zip, hash_file, hash_files},
 };
 
-use super::{java::get_manifest_by_version, version::{Custom, MinecraftVersion}, Cache, Instance, CACHE};
+use super::{
+    java::get_manifest_by_version,
+    version::{Custom, MinecraftVersion},
+    Cache, Instance, CACHE,
+};
 
 pub struct File {
     pub hash: String,
@@ -104,12 +108,19 @@ impl Downloader for Instance {
     async fn download_client(&self, cache: &MutexGuard<'_, Cache>) -> Result<()> {
         R.set_message(t!("client_check").to_string());
 
-        let file_path = self
-            .config
-            .root_path
-            .join("versions")
-            .join(&self.config.version_name)
-            .join(format!("{}.jar", self.config.version_name));
+        let file_path = if let Some(instance_path) = &self.config.instance_path {
+            instance_path
+                .join(&self.config.instance_name)
+                .join("versions")
+                .join(&self.config.version_name)
+                .join(format!("{}.jar", self.config.version_name))
+        } else {
+            self.config
+                .root_path
+                .join("versions")
+                .join(&self.config.version_name)
+                .join(format!("{}.jar", self.config.version_name))
+        };
 
         if file_path.is_file() && hash_file(&file_path)? == cache.package.downloads.client.sha1 {
             R.add_progress(1.0);
@@ -129,13 +140,21 @@ impl Downloader for Instance {
             //         .join(format!("{}.json", self.config.version_name)),
             //     serde_json::to_string_pretty(&cache.package).unwrap(),
             // )?
-        }else{
+        } else {
             fs::write(
-                self.config
-                    .root_path
-                    .join("versions")
-                    .join(&self.config.version_name)
-                    .join(format!("{}.json", self.config.version_name)),
+                if let Some(instance_path) = &self.config.instance_path {
+                    instance_path
+                        .join(&self.config.instance_name)
+                        .join("versions")
+                        .join(&self.config.version_name)
+                        .join(format!("{}.json", self.config.version_name))
+                } else {
+                    self.config
+                        .root_path
+                        .join("versions")
+                        .join(&self.config.version_name)
+                        .join(format!("{}.json", self.config.version_name))
+                },
                 serde_json::to_string_pretty(&cache.package).unwrap(),
             )?
         }
@@ -169,7 +188,7 @@ impl Downloader for Instance {
         if let super::version::MinecraftVersion::Custom(ext) = &self.config.version {
             match ext {
                 Custom::Fabric(v) => {
-                    if let Some(package) = &v.package{
+                    if let Some(package) = &v.package {
                         R.set_message(t!("fabric_check").to_string());
                         let mut progress = 0f64;
                         for i in &package.libraries {
@@ -191,7 +210,7 @@ impl Downloader for Instance {
                                 .join(parts[1])
                                 .join(parts[2])
                                 .join(&file_name);
-    
+
                             if !path.is_file() {
                                 R.set_message(t!("fabric_download_missing").to_string());
                                 download_retry(&url, &path).await?;
@@ -203,9 +222,9 @@ impl Downloader for Instance {
                             R.add_progress(1.0);
                         }
                     }
-                },
+                }
                 Custom::Quilt(v) => {
-                    if let Some(package) = &v.package{
+                    if let Some(package) = &v.package {
                         R.set_message(t!("quilt_check").to_string());
                         let mut progress = 0f64;
                         for i in &package.libraries {
@@ -227,7 +246,7 @@ impl Downloader for Instance {
                                 .join(parts[1])
                                 .join(parts[2])
                                 .join(&file_name);
-    
+
                             if !path.is_file() {
                                 R.set_message(t!("quilt_download_missing").to_string());
                                 download_retry(&url, &path).await?;
@@ -239,8 +258,8 @@ impl Downloader for Instance {
                             R.add_progress(1.0);
                         }
                     }
-                },
-                _=>unimplemented!()
+                }
+                _ => unimplemented!(),
             }
         }
         Ok(())

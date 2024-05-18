@@ -37,6 +37,7 @@ mod tests {
             version: MinecraftVersion::Custom(
                 Custom::Quilt(Quilt::new((1, 20, Some(4)), "0.24.0".to_string()))
             ),
+            instance_path : Some(PathBuf::from("C:\\Users\\Batu\\AppData\\Roaming\\.minecraft\\instances")),
             ..Config::default()
         });
         let mut p = launcher.launch().await.unwrap();
