@@ -1,30 +1,30 @@
 use crate::{
     error::Error,
-    minecraft::{ auth::AuthMethod, version::ToString },
-    network::{ download_retry, get, get_json },
-    prelude::{ Result, CLASSPATH_SEPERATOR, R },
-    reporter::{ Case, Reporter },
+    minecraft::{auth::AuthMethod, version::ToString},
+    network::{download_retry, get, get_json},
+    prelude::{Result, CLASSPATH_SEPERATOR, R},
+    reporter::{Case, Reporter},
     utils::json_from_file,
 };
 
+use ::serde::de::DeserializeOwned;
 use directories::BaseDirs;
-use futures_util::lock::{ Mutex, MutexGuard };
+use futures_util::lock::{Mutex, MutexGuard};
 use lazy_static::lazy_static;
-use log::{ error, warn };
+use log::{error, warn};
 use once_cell::sync::Lazy;
 use rust_i18n::t;
-use ::serde::de::DeserializeOwned;
 use std::{
     collections::HashSet,
     env,
-    fmt::{ self, Debug },
+    fmt::{self, Debug},
     fs,
     fs::File,
     io::Write,
-    path::{ PathBuf, MAIN_SEPARATOR_STR },
+    path::{PathBuf, MAIN_SEPARATOR_STR},
     process::Stdio,
 };
-use tokio::process::{ Child, Command };
+use tokio::process::{Child, Command};
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
@@ -35,8 +35,8 @@ use self::{
     custom::fabric::{get_package_by_version, Fabric},
     downloader::Downloader,
     java::JavaVersion,
-    serde::{ Action, GameElement, Index, Library, Name, Package, VersionManifest },
-    version::{ Custom, MinecraftVersion, VERSION_MANIFEST_URL },
+    serde::{Action, GameElement, Index, Library, Name, Package, VersionManifest},
+    version::{Custom, MinecraftVersion, VERSION_MANIFEST_URL},
 };
 
 pub mod auth;
@@ -96,9 +96,6 @@ impl Default for Config {
             base_dirs.config_dir().join(".minecraft")
         } else {
             let current_path = PathBuf::from(".minecraft");
-            R.send(
-                Case::SetMessage(t!("config_not_found", path = &current_path.display()).to_string())
-            );
             current_path
         };
         Self {
@@ -115,19 +112,23 @@ impl Default for Config {
     }
 }
 
-pub struct Instance {
+pub struct Instance<R: Reporter> {
     config: Config,
+    reporter: Option<R>,
 }
 
-impl Instance {
-    pub fn new(config: Config) -> Self {
-        Self { config }
+impl<R: Reporter> Instance<R> {
+    pub fn new(config: Config, reporter: Option<R>) -> Self {
+        Self { config, reporter }
     }
     pub async fn prepare<'a>(&mut self, cache: &'a mut MutexGuard<'_, Cache>) -> Result<()> {
-        R.send(Case::SetMessage(t!("prepare").to_string()));
+        self.reporter
+            .send(Case::SetMessage(t!("prepare").to_string()));
 
         if cache.package.id == String::default() {
-            let version_manifest_path: PathBuf = self.config.root_path
+            let version_manifest_path: PathBuf = self
+                .config
+                .root_path
                 .join("assets")
                 .join("indexes")
                 .join("version_manifest.json");
@@ -137,11 +138,9 @@ impl Instance {
             } else {
                 let manifest = get_json::<VersionManifest>(VERSION_MANIFEST_URL).await?;
                 let mut file = File::create(&version_manifest_path)?;
-                R.send(
-                    Case::SetSubMessage(
-                        t!("manifest_file_save", path = version_manifest_path.display()).to_string()
-                    )
-                );
+                self.reporter.send(Case::SetSubMessage(
+                    t!("manifest_file_save", path = version_manifest_path.display()).to_string(),
+                ));
                 file.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes())?;
                 manifest
             };
@@ -149,32 +148,32 @@ impl Instance {
             if let MinecraftVersion::Custom(ext) = &mut self.config.version {
                 match ext {
                     Custom::Fabric(v) => {
-                        self.config.version = MinecraftVersion::Custom(
-                            Custom::Fabric(custom::fabric::Fabric {
+                        self.config.version =
+                            MinecraftVersion::Custom(Custom::Fabric(custom::fabric::Fabric {
                                 version: v.version,
                                 loader_version: v.loader_version.to_string(),
                                 package: Some(
                                     get_package_by_version(
                                         v.version.to_string(),
-                                        v.loader_version.to_string()
-                                    ).await?
+                                        v.loader_version.to_string(),
+                                    )
+                                    .await?,
                                 ),
-                            })
-                        );
-                    },
+                            }));
+                    }
                     Custom::Quilt(v) => {
-                        self.config.version = MinecraftVersion::Custom(
-                            Custom::Quilt(custom::quilt::Quilt {
+                        self.config.version =
+                            MinecraftVersion::Custom(Custom::Quilt(custom::quilt::Quilt {
                                 version: v.version,
                                 loader_version: v.loader_version.to_string(),
                                 package: Some(
                                     crate::minecraft::custom::quilt::get_package_by_version(
                                         v.version.to_string(),
-                                        v.loader_version.to_string()
-                                    ).await?
+                                        v.loader_version.to_string(),
+                                    )
+                                    .await?,
                                 ),
-                            })
-                        );
+                            }));
                     }
                     _ => unimplemented!(),
                 }
@@ -183,10 +182,13 @@ impl Instance {
             let package = get_json(
                 &version_manifest
                     .clone()
-                    .versions.into_iter()
+                    .versions
+                    .into_iter()
                     .find(|x| x.id == self.config.version.to_string())
-                    .unwrap().url
-            ).await?;
+                    .unwrap()
+                    .url,
+            )
+            .await?;
 
             {
                 cache.package = package;
@@ -194,7 +196,9 @@ impl Instance {
             }
         }
 
-        let index_path = self.config.root_path
+        let index_path = self
+            .config
+            .root_path
             .join("assets")
             .join("indexes")
             .join(format!("{}.json", cache.package.asset_index.id.clone()));
@@ -202,7 +206,7 @@ impl Instance {
         let index: Index = if index_path.is_file() {
             json_from_file::<Index>(index_path)?
         } else {
-            download_retry(&cache.package.asset_index.url, &index_path).await?;
+            download_retry(&cache.package.asset_index.url, &index_path, &self.reporter).await?;
             json_from_file::<Index>(index_path)?
         };
 
@@ -229,25 +233,27 @@ impl Instance {
         let args = self.prepare_arguments(&mut cache)?;
         // `creation_flags` method avoids console window.
 
-        R.send(Case::SetMessage(t!("launching").to_string()));
+        self.reporter
+            .send(Case::SetMessage(t!("launching").to_string()));
 
-        println!("{:?}",args);
+        println!("{:?}", args);
         #[cfg(target_os = "windows")]
         {
             let child = Command::new(
-                self.config.java_path
+                self.config
+                    .java_path
                     .join(self.config.java_version.to_string())
                     .join("bin")
-                    .join("javaw.exe")
+                    .join("javaw.exe"),
             )
-                .current_dir(&self.config.root_path)
-                .args(args)
-                .stdout(Stdio::piped())
-                .creation_flags(0x08000000)
-                .spawn()
-                .expect("Failed to launch game");
+            .current_dir(&self.config.root_path)
+            .args(args)
+            .stdout(Stdio::piped())
+            .creation_flags(0x08000000)
+            .spawn()
+            .expect("Failed to launch game");
 
-            R.send(Case::RemoveProgress);
+            self.reporter.send(Case::RemoveProgress);
             Ok(child)
         }
 
@@ -264,7 +270,7 @@ impl Instance {
                 .spawn()
                 .expect("Failed to launch game");
 
-            R.send(Case::RemoveProgress);
+            self.reporter.send(Case::RemoveProgress);
             Ok(child)
         }
     }
@@ -272,20 +278,30 @@ impl Instance {
     pub fn parse_rule(&self, lib: &Library) -> bool {
         if let Some(rules) = &lib.rules {
             if rules.len() > 1 {
-                if
-                    rules[0].action == Action::Allow &&
-                    rules[1].action == Action::Disallow &&
-                    rules[1].os.as_ref().map_or(false, |os| os.name != Self::get_os())
+                if rules[0].action == Action::Allow
+                    && rules[1].action == Action::Disallow
+                    && rules[1]
+                        .os
+                        .as_ref()
+                        .map_or(false, |os| os.name != Self::get_os())
                 {
                     return Self::get_os() == Name::Osx;
                 } else {
                     return true;
                 }
             } else if rules[0].action == Action::Allow && rules[0].os.is_some() {
-                return rules[0].os.as_ref().map_or(false, |os| os.name != Self::get_os());
+                return rules[0]
+                    .os
+                    .as_ref()
+                    .map_or(false, |os| os.name != Self::get_os());
             }
         }
         false
+    }
+
+    fn handle_progress(self, total: f64, current: f64) {
+        self.reporter.send(Case::SetMaxSubProgress(total));
+        self.reporter.send(Case::SetSubProgress(current));
     }
 
     fn prepare_arguments(&self, cache: &mut MutexGuard<'_, Cache>) -> Result<Vec<String>> {
@@ -303,7 +319,8 @@ impl Instance {
         }
         let classpaths = self.get_classpaths(cache)?;
 
-        R.send(Case::SetMessage(t!("arguments_set").to_string()));
+        self.reporter
+            .send(Case::SetMessage(t!("arguments_set").to_string()));
 
         match &cache.package.arguments {
             Some(arguments) => {
@@ -337,131 +354,123 @@ impl Instance {
                         if string.contains("${natives_directory}") {
                             string = string.replace(
                                 "${natives_directory}",
-                                &self.config.root_path
+                                &self
+                                    .config
+                                    .root_path
                                     .join("natives")
                                     .join(self.config.version.to_string())
                                     .display()
-                                    .to_string()
+                                    .to_string(),
                             );
                         } else if string.contains("${launcher_name}") {
                             string = string.replace("${launcher_name}", "Cardinal");
                         } else if string.contains("${launcher_version}") {
-                            string = string.replace(
-                                "${launcher_version}",
-                                env!("CARGO_PKG_VERSION")
-                            );
+                            string =
+                                string.replace("${launcher_version}", env!("CARGO_PKG_VERSION"));
                         } else if string.contains("${classpath}") {
                             string = string.replace("${classpath}", classpaths.as_str());
                             string.push_str(
-                                &self.config.root_path
+                                &self
+                                    .config
+                                    .root_path
                                     .join("versions")
                                     .join(&self.config.version_name)
                                     .join(format!("{}.jar", self.config.version_name))
                                     .display()
-                                    .to_string()
+                                    .to_string(),
                             );
                         }
                         jvm.push(string);
                     }
                 }
-                if let MinecraftVersion::Custom(ext) = &self.config.version{
-                    match ext{
-                        Custom::Fabric(v)=>{
-                            if let Some(package) = &v.package{
+                if let MinecraftVersion::Custom(ext) = &self.config.version {
+                    match ext {
+                        Custom::Fabric(v) => {
+                            if let Some(package) = &v.package {
                                 jvm.push(package.main_class.clone());
                             }
-                        },
-                        Custom::Quilt(v)=>{
-                            if let Some(package) = &v.package{
+                        }
+                        Custom::Quilt(v) => {
+                            if let Some(package) = &v.package {
                                 jvm.push(package.main_class.clone());
                             }
-                        },
-                        _=>unimplemented!()
+                        }
+                        _ => unimplemented!(),
                     }
-                }
-                else{
+                } else {
                     jvm.push(cache.package.main_class.clone());
                 }
             }
-            None =>
-                match &cache.package.minecraft_arguments {
-                    Some(arguments) => {
-                        let arguments: Vec<String> = arguments
-                            .split(' ')
-                            .map(|x| x.to_string())
-                            .collect();
-                        let version_path = self.config.root_path
-                            .join("versions")
-                            .join(&self.config.version_name)
-                            .join(format!("{}.jar", self.config.version_name))
+            None => match &cache.package.minecraft_arguments {
+                Some(arguments) => {
+                    let arguments: Vec<String> =
+                        arguments.split(' ').map(|x| x.to_string()).collect();
+                    let version_path = self
+                        .config
+                        .root_path
+                        .join("versions")
+                        .join(&self.config.version_name)
+                        .join(format!("{}.jar", self.config.version_name))
+                        .display()
+                        .to_string();
+                    jvm.push(format!(
+                        "-Djava.library.path={}",
+                        self.config
+                            .root_path
+                            .join("natives")
+                            .join(self.config.version.to_string())
                             .display()
-                            .to_string();
-                        jvm.push(
-                            format!(
-                                "-Djava.library.path={}",
-                                self.config.root_path
-                                    .join("natives")
-                                    .join(self.config.version.to_string())
-                                    .display()
-                            )
-                        );
-                        jvm.push(format!("-Dminecraft.client.jar={}", version_path));
-                        jvm.push("-cp".to_string());
-                        jvm.push(format!("{}{}", classpaths, version_path));
+                    ));
+                    jvm.push(format!("-Dminecraft.client.jar={}", version_path));
+                    jvm.push("-cp".to_string());
+                    jvm.push(format!("{}{}", classpaths, version_path));
 
-                        jvm.push(cache.package.main_class.clone());
-                        for arg in arguments {
-                            let username = match &self.config.authentication {
-                                AuthMethod::Offline(offline_user) => offline_user.to_string(),
-                                AuthMethod::Online(microsoft_user) => unimplemented!(),
-                            };
-                            game.push(match arg.as_str() {
-                                // todo authentication
-                                "${auth_player_name}" => username,
-                                "${version_name}" => self.config.version_name.clone(),
-                                "${game_directory}" => self.config.root_path.display().to_string(),
-                                "${assets_root}" => {
-                                    self.config.root_path.join("assets").display().to_string()
-                                }
-                                "${assets_index_name}" => cache.package.asset_index.id.clone(),
-                                "${auth_uuid}" => "123".to_string(),
-                                "${auth_access_token}" => "123".to_string(),
-                                "${clientid}" => "123".to_string(),
-                                "${auth_xuid}" => "123".to_string(),
-                                "${user_type}" => "mojang".to_string(),
-                                "${version_type}" => "release".to_string(),
-                                "${user_properties}" => "{}".to_string(),
-                                "${game_assets}" =>
-                                    match &self.config.version {
-                                        MinecraftVersion::Release((_, v1, v2)) => {
-                                            if v1 < &8 {
-                                                self.config.root_path
-                                                    .join("assets")
-                                                    .join("virtual")
-                                                    .join("legacy")
-                                                    .display()
-                                                    .to_string()
-                                            } else {
-                                                self.config.root_path
-                                                    .join("assets")
-                                                    .display()
-                                                    .to_string()
-                                            }
-                                        }
-                                        _ =>
-                                            self.config.root_path
-                                                .join("assets")
-                                                .display()
-                                                .to_string(),
+                    jvm.push(cache.package.main_class.clone());
+                    for arg in arguments {
+                        let username = match &self.config.authentication {
+                            AuthMethod::Offline(offline_user) => offline_user.to_string(),
+                            AuthMethod::Online(microsoft_user) => unimplemented!(),
+                        };
+                        game.push(match arg.as_str() {
+                            // todo authentication
+                            "${auth_player_name}" => username,
+                            "${version_name}" => self.config.version_name.clone(),
+                            "${game_directory}" => self.config.root_path.display().to_string(),
+                            "${assets_root}" => {
+                                self.config.root_path.join("assets").display().to_string()
+                            }
+                            "${assets_index_name}" => cache.package.asset_index.id.clone(),
+                            "${auth_uuid}" => "123".to_string(),
+                            "${auth_access_token}" => "123".to_string(),
+                            "${clientid}" => "123".to_string(),
+                            "${auth_xuid}" => "123".to_string(),
+                            "${user_type}" => "mojang".to_string(),
+                            "${version_type}" => "release".to_string(),
+                            "${user_properties}" => "{}".to_string(),
+                            "${game_assets}" => match &self.config.version {
+                                MinecraftVersion::Release((_, v1, v2)) => {
+                                    if v1 < &8 {
+                                        self.config
+                                            .root_path
+                                            .join("assets")
+                                            .join("virtual")
+                                            .join("legacy")
+                                            .display()
+                                            .to_string()
+                                    } else {
+                                        self.config.root_path.join("assets").display().to_string()
                                     }
-                                _ => arg.to_string(),
-                            });
-                        }
-                    }
-                    None => {
-                        unimplemented!();
+                                }
+                                _ => self.config.root_path.join("assets").display().to_string(),
+                            },
+                            _ => arg.to_string(),
+                        });
                     }
                 }
+                None => {
+                    unimplemented!();
+                }
+            },
         }
         jvm.append(&mut game);
 
@@ -475,7 +484,8 @@ impl Instance {
 
         let mut cp = String::new();
 
-        R.send(Case::SetMessage(t!("classpaths_set").to_string()));
+        self.reporter
+            .send(Case::SetMessage(t!("classpaths_set").to_string()));
 
         // Iterating through package libraries to find classpaths.
         for lib in &cache.package.libraries {
@@ -483,7 +493,9 @@ impl Instance {
             if let Some(artifact) = &lib.downloads.artifact {
                 // Parsing the rule for operating system.
                 if !self.parse_rule(lib) {
-                    let cp_path = self.config.root_path
+                    let cp_path = self
+                        .config
+                        .root_path
                         .join("libraries")
                         .join(artifact.path.replace('/', MAIN_SEPARATOR_STR));
                     cp.push_str(format!("{}{}", cp_path.display(), CLASSPATH_SEPERATOR).as_str());
@@ -502,20 +514,27 @@ impl Instance {
                     panic!("Unsupported OS");
                 }
                 if let Some(natives) = mapping {
-                    let classifier_path = self.config.root_path
+                    let classifier_path = self
+                        .config
+                        .root_path
                         .join("libraries")
                         .join(natives.path.replace('/', std::path::MAIN_SEPARATOR_STR));
 
                     cp.push_str(
                         format!(
                             "{}{}",
-                            self.config.root_path.join("libraries").join(classifier_path).display(),
+                            self.config
+                                .root_path
+                                .join("libraries")
+                                .join(classifier_path)
+                                .display(),
                             CLASSPATH_SEPERATOR
-                        ).as_str()
+                        )
+                        .as_str(),
                     );
                 }
             }
-            R.send(Case::AddProgress(1.0));
+            self.reporter.send(Case::AddProgress(1.0));
         }
 
         if let MinecraftVersion::Custom(ext) = &self.config.version {
@@ -533,17 +552,19 @@ impl Instance {
                                 parts[2],
                                 file_name
                             );
-                            let path = self.config.root_path
+                            let path = self
+                                .config
+                                .root_path
                                 .join("libraries")
                                 .join(parts[0].replace('.', std::path::MAIN_SEPARATOR_STR))
                                 .join(parts[1])
                                 .join(parts[2])
                                 .join(&file_name);
                             cp.push_str(format!("{};", path.display()).as_str());
-                            R.send(Case::AddProgress(1.0));
+                            self.reporter.send(Case::AddProgress(1.0));
                         }
                     }
-                },
+                }
                 Custom::Quilt(v) => {
                     if let Some(package) = &v.package {
                         for i in &package.libraries {
@@ -557,14 +578,16 @@ impl Instance {
                                 parts[2],
                                 file_name
                             );
-                            let path = self.config.root_path
+                            let path = self
+                                .config
+                                .root_path
                                 .join("libraries")
                                 .join(parts[0].replace('.', std::path::MAIN_SEPARATOR_STR))
                                 .join(parts[1])
                                 .join(parts[2])
                                 .join(&file_name);
                             cp.push_str(format!("{};", path.display()).as_str());
-                            R.send(Case::AddProgress(1.0));
+                            self.reporter.send(Case::AddProgress(1.0));
                         }
                     }
                 }

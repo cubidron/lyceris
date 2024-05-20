@@ -10,11 +10,15 @@ use tokio::try_join;
 use crate::{
     network::download_retry,
     prelude::{Result, R},
-    reporter::{Case, Progress},
+    reporter::{Case, Progress, Reporter},
     utils::{extract_zip, hash_file, hash_files},
 };
 
-use super::{java::get_manifest_by_version, version::{Custom, MinecraftVersion}, Cache, Instance, CACHE};
+use super::{
+    java::get_manifest_by_version,
+    version::{Custom, MinecraftVersion},
+    Cache, Instance, CACHE,
+};
 
 pub struct File {
     pub hash: String,
@@ -41,7 +45,7 @@ pub trait Downloader {
     }
 }
 #[async_trait]
-impl Downloader for Instance {
+impl<R: Reporter> Downloader for Instance<R> {
     async fn download_assets(&self, cache: &MutexGuard<'_, Cache>) -> Result<()> {
         R.set_message(t!("resources_check").to_string());
 
@@ -84,6 +88,7 @@ impl Downloader for Instance {
                         object.hash
                     ),
                     &hash_path,
+                    &self.reporter,
                 )
                 .await?;
                 R.add_progress(1.0);
@@ -93,7 +98,7 @@ impl Downloader for Instance {
 
         for file in files {
             if !file.state {
-                download_retry(&file.url, &file.path).await?;
+                download_retry(&file.url, &file.path, &self.reporter).await?;
             }
             R.add_progress(1.0);
         }
@@ -118,7 +123,12 @@ impl Downloader for Instance {
 
         R.set_message(t!("client_install").to_string());
 
-        download_retry(cache.package.downloads.client.url.clone(), &file_path).await?;
+        download_retry(
+            cache.package.downloads.client.url.clone(),
+            &file_path,
+            &self.reporter,
+        )
+        .await?;
 
         if let MinecraftVersion::Custom(_) = self.config.version {
             // fs::write(
@@ -129,7 +139,7 @@ impl Downloader for Instance {
             //         .join(format!("{}.json", self.config.version_name)),
             //     serde_json::to_string_pretty(&cache.package).unwrap(),
             // )?
-        }else{
+        } else {
             fs::write(
                 self.config
                     .root_path
@@ -160,7 +170,7 @@ impl Downloader for Instance {
                     && (!file_path.is_file() || hash_file(&file_path)? != artifact.sha1)
                 {
                     R.set_message(t!("libraries_download_missing").to_string());
-                    download_retry(&artifact.url, &file_path).await?;
+                    download_retry(&artifact.url, &file_path, &self.reporter).await?;
                 }
             }
             R.add_progress(1.0);
@@ -169,7 +179,7 @@ impl Downloader for Instance {
         if let super::version::MinecraftVersion::Custom(ext) = &self.config.version {
             match ext {
                 Custom::Fabric(v) => {
-                    if let Some(package) = &v.package{
+                    if let Some(package) = &v.package {
                         R.set_message(t!("fabric_check").to_string());
                         let mut progress = 0f64;
                         for i in &package.libraries {
@@ -191,21 +201,21 @@ impl Downloader for Instance {
                                 .join(parts[1])
                                 .join(parts[2])
                                 .join(&file_name);
-    
+
                             if !path.is_file() {
                                 R.set_message(t!("fabric_download_missing").to_string());
-                                download_retry(&url, &path).await?;
+                                download_retry(&url, &path, &self.reporter).await?;
                             } else if let Some(sha1) = &i.sha1 {
                                 if &hash_file(&path)? != sha1 {
-                                    download_retry(&url, &path).await?;
+                                    download_retry(&url, &path, &self.reporter).await?;
                                 }
                             }
                             R.add_progress(1.0);
                         }
                     }
-                },
+                }
                 Custom::Quilt(v) => {
-                    if let Some(package) = &v.package{
+                    if let Some(package) = &v.package {
                         R.set_message(t!("quilt_check").to_string());
                         let mut progress = 0f64;
                         for i in &package.libraries {
@@ -227,20 +237,20 @@ impl Downloader for Instance {
                                 .join(parts[1])
                                 .join(parts[2])
                                 .join(&file_name);
-    
+
                             if !path.is_file() {
                                 R.set_message(t!("quilt_download_missing").to_string());
-                                download_retry(&url, &path).await?;
+                                download_retry(&url, &path,&self.reporter).await?;
                             } else if let Some(sha1) = &i.sha1 {
                                 if &hash_file(&path)? != sha1 {
-                                    download_retry(&url, &path).await?;
+                                    download_retry(&url, &path,&self.reporter).await?;
                                 }
                             }
                             R.add_progress(1.0);
                         }
                     }
-                },
-                _=>unimplemented!()
+                }
+                _ => unimplemented!(),
             }
         }
         Ok(())
@@ -261,7 +271,7 @@ impl Downloader for Instance {
                     continue;
                 }
                 R.set_message(t!("java_download_missing").to_string());
-                download_retry(&downloads.raw.url, &path).await?;
+                download_retry(&downloads.raw.url, &path,&self.reporter).await?;
             }
             R.add_progress(1.0);
         }
@@ -314,7 +324,7 @@ impl Downloader for Instance {
                 fs::create_dir_all(&natives_path);
                 let native_file = natives_path.join("native.jar");
                 R.set_message(t!("natives_download_missing").to_string());
-                download_retry(&classifier_url, &native_file).await?;
+                download_retry(&classifier_url, &native_file,&self.reporter).await?;
                 extract_zip(&native_file, &natives_path)?;
             }
             R.add_progress(1.0);

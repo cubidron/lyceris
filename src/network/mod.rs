@@ -19,7 +19,6 @@ pub const RETRY_COUNT: u8 = 3;
 ///
 /// Uses `CARGO_PKG_NAME/CARGO_PKG_VERSION` as user agent.
 static CLIENT: Lazy<Client> = Lazy::new(|| {
-    
     ClientBuilder::new()
         .user_agent(concat!(
             env!("CARGO_PKG_NAME"),
@@ -34,28 +33,31 @@ static CLIENT: Lazy<Client> = Lazy::new(|| {
 ///
 /// Retries the request if it fails with the given amount of retries (default = 3).
 pub async fn get(url: impl IntoUrl) -> Result<Response> {
-    R.send(Case::SetSubMessage(format!(
-        "Sending GET request to {}",
-        url.as_str()
-    )));
-
     Ok(retry(|| CLIENT.get(url.as_str()).send(), reqwest::Result::is_ok).await?)
 }
 /// Sends a GET request to the given URL and returns JSON value.
-/// 
+///
 /// Retries the request if it fails with the given amount of retries (default = 3).
 pub async fn get_json<F: DeserializeOwned>(url: impl IntoUrl) -> Result<F> {
     Ok(get(url).await?.json::<F>().await?)
 }
 
-pub async fn download_retry(url: impl IntoUrl, path: &impl AsRef<Path>) -> Result<()> {
-    retry(|| download(url.as_str(), path), Result::is_ok).await
+pub async fn download_retry<R: Reporter>(
+    url: impl IntoUrl,
+    path: &impl AsRef<Path>,
+    reporter: &Option<R>,
+) -> Result<()> {
+    retry(|| download(url.as_str(), path, &reporter), Result::is_ok).await
 }
 
 /// Download file from the given URL to the destination path.
-/// 
+///
 /// Retries the download if it fails with the given amount of retries (default = 3).
-pub async fn download(url: impl IntoUrl, path: impl AsRef<Path>) -> Result<()> {
+pub async fn download<R: Reporter>(
+    url: impl IntoUrl,
+    path: impl AsRef<Path>,
+    reporter: &Option<R>,
+) -> Result<()> {
     let path = path.as_ref();
     let response = get(url).await?;
 
@@ -77,14 +79,14 @@ pub async fn download(url: impl IntoUrl, path: impl AsRef<Path>) -> Result<()> {
     let mut progress: f64 = 0f64;
     let mut stream = response.bytes_stream();
 
-    R.send(Case::SetMaxSubProgress(total_size as f64));
+    reporter.send(Case::SetMaxSubProgress(total_size as f64));
 
     while let Some(item) = stream.next().await {
         let chunk = item?;
         temp_file.write_all(&chunk).await?;
         progress += chunk.len() as f64;
 
-        R.send(Case::SetSubProgress(progress));
+        reporter.send(Case::SetSubProgress(progress));
     }
 
     fs::rename(temp_path, path).await?;
