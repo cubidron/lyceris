@@ -28,17 +28,27 @@ mod tests {
     use crate::{ minecraft::{ version::MinecraftVersion, Instance }, reporter::Reporter };
     use tokio::io::AsyncBufReadExt;
     use tokio::{ io::{ AsyncWriteExt, BufReader }, test };
+
+    #[derive(Clone)]
+    struct TestReporter{}
+
+    impl Reporter for TestReporter{
+        fn send(&self, case : crate::reporter::Case) {
+            println!("{:?}",case);
+        }
+    }
+
     #[test]
     async fn test_launch() {
         //let config = Config{Config::default()};
         // println!("{}",config.root_path.display());
         // println!("{}",config.java_path.display());
-        let mut launcher: Instance = Instance::new(Config {
+        let mut launcher: Instance<TestReporter> = Instance::new(Config {
             version: MinecraftVersion::Custom(
                 Custom::Quilt(Quilt::new((1, 20, Some(4)), "0.24.0".to_string()))
             ),
             ..Config::default()
-        });
+        },Some(TestReporter{}));
         let mut p = launcher.launch().await.unwrap();
         let stdout = p.stdout.take().expect("no stdout");
 
