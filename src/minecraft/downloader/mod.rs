@@ -109,12 +109,19 @@ impl<R: Reporter> Downloader for Instance<R> {
     async fn download_client(&self, cache: &MutexGuard<'_, Cache>) -> Result<()> {
         R.set_message(t!("client_check").to_string());
 
-        let file_path = self
-            .config
-            .root_path
-            .join("versions")
-            .join(&self.config.version_name)
-            .join(format!("{}.jar", self.config.version_name));
+        let file_path = if let Some(instance_path) = &self.config.instance_path {
+            instance_path
+                .join(&self.config.instance_name)
+                .join("versions")
+                .join(&self.config.version_name)
+                .join(format!("{}.jar", self.config.version_name))
+        } else {
+            self.config
+                .root_path
+                .join("versions")
+                .join(&self.config.version_name)
+                .join(format!("{}.jar", self.config.version_name))
+        };
 
         if file_path.is_file() && hash_file(&file_path)? == cache.package.downloads.client.sha1 {
             R.add_progress(1.0);
@@ -141,11 +148,19 @@ impl<R: Reporter> Downloader for Instance<R> {
             // )?
         } else {
             fs::write(
-                self.config
-                    .root_path
-                    .join("versions")
-                    .join(&self.config.version_name)
-                    .join(format!("{}.json", self.config.version_name)),
+                if let Some(instance_path) = &self.config.instance_path {
+                    instance_path
+                        .join(&self.config.instance_name)
+                        .join("versions")
+                        .join(&self.config.version_name)
+                        .join(format!("{}.json", self.config.version_name))
+                } else {
+                    self.config
+                        .root_path
+                        .join("versions")
+                        .join(&self.config.version_name)
+                        .join(format!("{}.json", self.config.version_name))
+                },
                 serde_json::to_string_pretty(&cache.package).unwrap(),
             )?
         }

@@ -65,6 +65,10 @@ pub struct Config {
     pub authentication: AuthMethod,
     // Root directory of Minecraft files. Default: config_directory/.minecraft
     pub root_path: PathBuf,
+    // Path of the instance. Default: None
+    pub instance_path: Option<PathBuf>,
+    // Name of the instance. Default : Cardinal
+    pub instance_name: String,
     // Minecraft version. Default: 1.16
     pub version: MinecraftVersion,
     // Version name in case that you're using custom version names. It only changes name of the file in versions folder. Default: Same as version
@@ -101,6 +105,8 @@ impl Default for Config {
         Self {
             authentication: AuthMethod::Offline("Lyceris".to_string()),
             root_path: root_path.clone(),
+            instance_path: None,
+            instance_name: "Cardinal".to_string(),
             version: default_version.clone(),
             version_name: String::default(),
             memory: Memory::Gigabyte(2, 2),
@@ -270,7 +276,11 @@ impl<R: Reporter> Instance<R> {
             perms.set_mode(0o755);
             fs::set_permissions(&path, perms)?;
             let child = Command::new(path)
-                .current_dir(self.root_path)
+                .current_dir(if let Some(instance_path) = &self.config.instance_path {
+                    instance_path.join(&self.config.instance_name)
+                } else {
+                    self.config.root_path.clone()
+                })
                 .args(jvm)
                 .stdout(Stdio::piped())
                 .spawn()
@@ -340,7 +350,11 @@ impl<R: Reporter> Instance<R> {
                             // todo authentication
                             "${auth_player_name}" => username.clone(),
                             "${version_name}" => self.config.version_name.clone(),
-                            "${game_directory}" => self.config.root_path.display().to_string(),
+                            "${game_directory}" => if let Some(instance_path) = &self.config.instance_path {
+                                instance_path.join(&self.config.instance_name).display().to_string()
+                            } else {
+                                self.config.root_path.display().to_string()
+                            },
                             "${assets_root}" => {
                                 self.config.root_path.join("assets").display().to_string()
                             }
