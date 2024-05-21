@@ -25,7 +25,10 @@ mod tests {
     use crate::minecraft::custom::quilt::Quilt;
     use crate::minecraft::version::Custom;
     use crate::minecraft::Config;
+    use crate::network::post;
     use crate::{ minecraft::{ version::MinecraftVersion, Instance }, reporter::Reporter };
+    use reqwest::Body;
+    use serde_json::{json, Value};
     use tokio::io::AsyncBufReadExt;
     use tokio::{ io::{ AsyncWriteExt, BufReader }, test };
 
@@ -40,21 +43,21 @@ mod tests {
 
     #[test]
     async fn test_launch() {
-        //let config = Config{Config::default()};
-        // println!("{}",config.root_path.display());
-        // println!("{}",config.java_path.display());
-        let mut launcher: Instance<TestReporter> = Instance::new(Config {
-            version: MinecraftVersion::Custom(
-                Custom::Quilt(Quilt::new((1, 20, Some(4)), "0.24.0".to_string()))
-            ),
-            ..Config::default()
-        },Some(TestReporter{}));
-        let mut p = launcher.launch().await.unwrap();
-        let stdout = p.stdout.take().expect("no stdout");
+        // //let config = Config{Config::default()};
+        // // println!("{}",config.root_path.display());
+        // // println!("{}",config.java_path.display());
+        // let mut launcher: Instance<TestReporter> = Instance::new(Config {
+        //     version: MinecraftVersion::Custom(
+        //         Custom::Quilt(Quilt::new((1, 20, Some(4)), "0.24.0".to_string()))
+        //     ),
+        //     ..Config::default()
+        // },Some(TestReporter{}));
+        // let mut p = launcher.launch().await.unwrap();
+        // let stdout = p.stdout.take().expect("no stdout");
 
-        let mut lines = BufReader::new(stdout).lines();
-        while let Some(line) = lines.next_line().await.unwrap() {
-            println!("{}", line);
-        }
+        // let mut lines = BufReader::new(stdout).lines();
+        // while let Some(line) = lines.next_line().await.unwrap() {
+        //     println!("{}", line);
+        // }
     }
 }

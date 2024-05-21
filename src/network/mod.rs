@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use futures_util::{Future, StreamExt, TryFutureExt};
 use once_cell::sync::Lazy;
-use reqwest::{Client, ClientBuilder, IntoUrl, Response, Url};
+use reqwest::{Body, Client, ClientBuilder, IntoUrl, Response, Url};
 use serde::de::DeserializeOwned;
 use tokio::io::AsyncWriteExt;
 use tokio::{fs, io};
@@ -35,6 +35,14 @@ static CLIENT: Lazy<Client> = Lazy::new(|| {
 pub async fn get(url: impl IntoUrl) -> Result<Response> {
     Ok(retry(|| CLIENT.get(url.as_str()).send(), reqwest::Result::is_ok).await?)
 }
+
+/// Sends a POST request to the given URL with payload.
+/// 
+pub async fn post<P : DeserializeOwned + ToString>(url: impl IntoUrl, payload : P) -> Result<Response>{
+    let payload = Body::from(payload.to_string());
+    Ok(CLIENT.post(url.as_str()).body(payload).send().await?)
+}
+
 /// Sends a GET request to the given URL and returns JSON value.
 ///
 /// Retries the request if it fails with the given amount of retries (default = 3).
