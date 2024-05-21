@@ -20,3 +20,4 @@ fabric_check: Checking fabric
 fabric_download_missing: Downloading fabric
 quilt_check: Checking quilt
 quilt_download_missing: Downloading quilt
+max_memory_set: Max memory set to %{max} because of the available memory

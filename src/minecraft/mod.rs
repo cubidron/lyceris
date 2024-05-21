@@ -325,12 +325,31 @@ impl<R: Reporter> Instance<R> {
     fn prepare_arguments(&self, store: &mut MutexGuard<'_, Store>) -> Result<Vec<String>> {
         let (mut game, mut jvm) = (Vec::<String>::new(), Vec::<String>::new());
 
+        let mut total_memory = sysinfo::System::new_all().available_memory();
         match self.config.memory {
-            Memory::Gigabyte(min, max) => {
+            Memory::Gigabyte(mut min, mut max) => {
+                total_memory = (total_memory / 1024 / 1024 / 1024);
+                if max > total_memory as u16{
+                    max = total_memory as u16;
+                }
+                if min > max{
+                    min = max;
+                }
+                self.reporter
+                .send(Case::SetMessage(t!("max_memory_set", max = max).to_string()));
                 jvm.push(format!("-Xms{}G", min));
                 jvm.push(format!("-Xmx{}G", max));
             }
-            Memory::Megabyte(min, max) => {
+            Memory::Megabyte(mut min,mut max) => {
+                total_memory = total_memory / 1024 / 1024;
+                if max > total_memory{
+                    max = total_memory;
+                }
+                if min > max{
+                    min = max;
+                }
+                self.reporter
+                .send(Case::SetMessage(t!("max_memory_set", max = max).to_string()));
                 jvm.push(format!("-Xms{}M", min));
                 jvm.push(format!("-Xmx{}M", max));
             }
