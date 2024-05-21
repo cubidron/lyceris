@@ -455,7 +455,11 @@ impl<R: Reporter> Instance<R> {
                             // todo authentication
                             "${auth_player_name}" => username,
                             "${version_name}" => self.config.version_name.clone(),
-                            "${game_directory}" => self.config.root_path.display().to_string(),
+                            "${game_directory}" => if let Some(instance_path) = &self.config.instance_path {
+                                instance_path.join(&self.config.instance_name).display().to_string()
+                            } else {
+                                self.config.root_path.display().to_string()
+                            },
                             "${assets_root}" => {
                                 self.config.root_path.join("assets").display().to_string()
                             }
