@@ -18,8 +18,7 @@ use std::{
     collections::HashSet,
     env,
     fmt::{self, Debug},
-    fs,
-    fs::File,
+    fs::{self, create_dir_all, File},
     io::Write,
     path::{PathBuf, MAIN_SEPARATOR_STR},
     process::Stdio,
@@ -126,6 +125,12 @@ impl<R: Reporter> Instance<R> {
         self.reporter
             .send(Case::SetMessage(t!("prepare").to_string()));
 
+        create_dir_all(self
+            .config
+            .root_path
+            .join("assets")
+            .join("indexes")).ok();
+        
         if cache.package.id == String::default() {
             let version_manifest_path: PathBuf = self
                 .config
