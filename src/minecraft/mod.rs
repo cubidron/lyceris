@@ -46,7 +46,7 @@ pub mod serde;
 pub mod version;
 
 lazy_static! {
-    static ref CACHE: Mutex<Cache> = Mutex::new(Cache {
+    static ref STORE: Mutex<Store> = Mutex::new(Store {
         version_manifest: VersionManifest::default(),
         package: Package::default(),
         index: Index::default(),
@@ -85,7 +85,7 @@ pub struct Config {
     pub custom_launch_args: Vec<String>,
 }
 
-pub struct Cache {
+pub struct Store {
     version_manifest: VersionManifest,
     package: Package,
     index: Index,
@@ -127,7 +127,7 @@ impl<R: Reporter> Instance<R> {
     pub fn new(config: Config, reporter: Option<R>) -> Self {
         Self { config, reporter }
     }
-    pub async fn prepare<'a>(&mut self, cache: &'a mut MutexGuard<'_, Cache>) -> Result<()> {
+    pub async fn prepare<'a>(&mut self, store: &'a mut MutexGuard<'_, Store>) -> Result<()> {
         self.reporter
             .send(Case::SetMessage(t!("prepare").to_string()));
 
@@ -137,7 +137,7 @@ impl<R: Reporter> Instance<R> {
             .join("assets")
             .join("indexes")).ok();
         
-        if cache.package.id == String::default() {
+        if store.package.id == String::default() {
             let version_manifest_path: PathBuf = self
                 .config
                 .root_path
@@ -203,8 +203,8 @@ impl<R: Reporter> Instance<R> {
             .await?;
 
             {
-                cache.package = package;
-                cache.version_manifest = version_manifest;
+                store.package = package;
+                store.version_manifest = version_manifest;
             }
         }
 
@@ -213,12 +213,12 @@ impl<R: Reporter> Instance<R> {
             .root_path
             .join("assets")
             .join("indexes")
-            .join(format!("{}.json", cache.package.asset_index.id.clone()));
+            .join(format!("{}.json", store.package.asset_index.id.clone()));
 
         let index: Index = if index_path.is_file() {
             json_from_file::<Index>(index_path)?
         } else {
-            download_retry(&cache.package.asset_index.url, &index_path, &self.reporter).await?;
+            download_retry(&store.package.asset_index.url, &index_path, &self.reporter).await?;
             json_from_file::<Index>(index_path)?
         };
 
@@ -230,19 +230,26 @@ impl<R: Reporter> Instance<R> {
             self.config.java_path = self.config.root_path.join("runtimes");
         }
 
-        cache.index = index;
+        store.index = index;
 
         Ok(())
     }
 
     pub async fn launch(&mut self) -> Result<Child> {
-        let mut cache = CACHE.lock().await;
+        let mut store = STORE.lock().await;
 
-        self.prepare(&mut cache).await?;
+        *store = Store {
+            version_manifest: VersionManifest::default(),
+            package: Package::default(),
+            index: Index::default(),
+            classpaths: None,
+        };
 
-        self.install(&cache).await?;
+        self.prepare(&mut store).await?;
 
-        let args = self.prepare_arguments(&mut cache)?;
+        self.install(&store).await?;
+
+        let args = self.prepare_arguments(&mut store)?;
         // `creation_flags` method avoids console window.
 
         self.reporter
@@ -315,12 +322,7 @@ impl<R: Reporter> Instance<R> {
         false
     }
 
-    fn handle_progress(self, total: f64, current: f64) {
-        self.reporter.send(Case::SetMaxSubProgress(total));
-        self.reporter.send(Case::SetSubProgress(current));
-    }
-
-    fn prepare_arguments(&self, cache: &mut MutexGuard<'_, Cache>) -> Result<Vec<String>> {
+    fn prepare_arguments(&self, store: &mut MutexGuard<'_, Store>) -> Result<Vec<String>> {
         let (mut game, mut jvm) = (Vec::<String>::new(), Vec::<String>::new());
 
         match self.config.memory {
@@ -333,12 +335,12 @@ impl<R: Reporter> Instance<R> {
                 jvm.push(format!("-Xmx{}M", max));
             }
         }
-        let classpaths = self.get_classpaths(cache)?;
+        let classpaths = self.get_classpaths(store)?;
 
         self.reporter
             .send(Case::SetMessage(t!("arguments_set").to_string()));
 
-        match &cache.package.arguments {
+        match &store.package.arguments {
             Some(arguments) => {
                 let username = match &self.config.authentication {
                     AuthMethod::Offline(offline_user) => offline_user,
@@ -358,7 +360,7 @@ impl<R: Reporter> Instance<R> {
                             "${assets_root}" => {
                                 self.config.root_path.join("assets").display().to_string()
                             }
-                            "${assets_index_name}" => cache.package.asset_index.id.clone(),
+                            "${assets_index_name}" => store.package.asset_index.id.clone(),
                             "${auth_uuid}" => "bc58f189-ef1a-4bca-9e4f-e047ee4432be".to_string(),
                             "${auth_access_token}" => "123".to_string(),
                             "${clientid}" => "123".to_string(),
@@ -418,10 +420,10 @@ impl<R: Reporter> Instance<R> {
                         _ => unimplemented!(),
                     }
                 } else {
-                    jvm.push(cache.package.main_class.clone());
+                    jvm.push(store.package.main_class.clone());
                 }
             }
-            None => match &cache.package.minecraft_arguments {
+            None => match &store.package.minecraft_arguments {
                 Some(arguments) => {
                     let arguments: Vec<String> =
                         arguments.split(' ').map(|x| x.to_string()).collect();
@@ -445,7 +447,7 @@ impl<R: Reporter> Instance<R> {
                     jvm.push("-cp".to_string());
                     jvm.push(format!("{}{}", classpaths, version_path));
 
-                    jvm.push(cache.package.main_class.clone());
+                    jvm.push(store.package.main_class.clone());
                     for arg in arguments {
                         let username = match &self.config.authentication {
                             AuthMethod::Offline(offline_user) => offline_user.to_string(),
@@ -463,7 +465,7 @@ impl<R: Reporter> Instance<R> {
                             "${assets_root}" => {
                                 self.config.root_path.join("assets").display().to_string()
                             }
-                            "${assets_index_name}" => cache.package.asset_index.id.clone(),
+                            "${assets_index_name}" => store.package.asset_index.id.clone(),
                             "${auth_uuid}" => "123".to_string(),
                             "${auth_access_token}" => "123".to_string(),
                             "${clientid}" => "123".to_string(),
@@ -501,8 +503,8 @@ impl<R: Reporter> Instance<R> {
         Ok(jvm)
     }
 
-    fn get_classpaths(&self, cache: &mut MutexGuard<Cache>) -> Result<String> {
-        if let Some(cp) = &cache.classpaths {
+    fn get_classpaths(&self, store: &mut MutexGuard<Store>) -> Result<String> {
+        if let Some(cp) = &store.classpaths {
             return Ok(cp.to_string());
         }
 
@@ -512,7 +514,7 @@ impl<R: Reporter> Instance<R> {
             .send(Case::SetMessage(t!("classpaths_set").to_string()));
 
         // Iterating through package libraries to find classpaths.
-        for lib in &cache.package.libraries {
+        for lib in &store.package.libraries {
             // If classpath is installable it must have artifact property.
             if let Some(artifact) = &lib.downloads.artifact {
                 // Parsing the rule for operating system.

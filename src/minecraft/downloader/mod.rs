@@ -17,7 +17,7 @@ use crate::{
 use super::{
     java::get_manifest_by_version,
     version::{Custom, MinecraftVersion},
-    Cache, Instance, CACHE,
+    Store, Instance, STORE,
 };
 
 pub struct File {
@@ -29,27 +29,27 @@ pub struct File {
 
 #[async_trait]
 pub trait Downloader {
-    async fn download_assets(&self, cache: &MutexGuard<'_, Cache>) -> Result<()>;
-    async fn download_client(&self, cache: &MutexGuard<'_, Cache>) -> Result<()>;
-    async fn download_libraries(&self, cache: &MutexGuard<'_, Cache>) -> Result<()>;
-    async fn download_natives(&self, cache: &MutexGuard<'_, Cache>) -> Result<()>;
+    async fn download_assets(&self, store: &MutexGuard<'_, Store>) -> Result<()>;
+    async fn download_client(&self, store: &MutexGuard<'_, Store>) -> Result<()>;
+    async fn download_libraries(&self, store: &MutexGuard<'_, Store>) -> Result<()>;
+    async fn download_natives(&self, store: &MutexGuard<'_, Store>) -> Result<()>;
     async fn download_java(&self) -> Result<()>;
-    async fn install(&self, cache: &MutexGuard<'_, Cache>) -> Result<((), (), (), (), ())> {
+    async fn install(&self, store: &MutexGuard<'_, Store>) -> Result<((), (), (), (), ())> {
         try_join!(
-            self.download_client(cache),
-            self.download_assets(cache),
-            self.download_libraries(cache),
-            self.download_natives(cache),
+            self.download_client(store),
+            self.download_assets(store),
+            self.download_libraries(store),
+            self.download_natives(store),
             self.download_java(),
         )
     }
 }
 #[async_trait]
 impl<R: Reporter> Downloader for Instance<R> {
-    async fn download_assets(&self, cache: &MutexGuard<'_, Cache>) -> Result<()> {
+    async fn download_assets(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
         R.set_message(t!("resources_check").to_string());
 
-        let index = &cache.index.clone();
+        let index = &store.index.clone();
 
         let mut files: Vec<File> = vec![];
 
@@ -106,7 +106,7 @@ impl<R: Reporter> Downloader for Instance<R> {
         Ok(())
     }
 
-    async fn download_client(&self, cache: &MutexGuard<'_, Cache>) -> Result<()> {
+    async fn download_client(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
         R.set_message(t!("client_check").to_string());
 
         let file_path = if let Some(instance_path) = &self.config.instance_path {
@@ -123,7 +123,7 @@ impl<R: Reporter> Downloader for Instance<R> {
                 .join(format!("{}.jar", self.config.version_name))
         };
 
-        if file_path.is_file() && hash_file(&file_path)? == cache.package.downloads.client.sha1 {
+        if file_path.is_file() && hash_file(&file_path)? == store.package.downloads.client.sha1 {
             R.add_progress(1.0);
             return Ok(());
         }
@@ -131,7 +131,7 @@ impl<R: Reporter> Downloader for Instance<R> {
         R.set_message(t!("client_install").to_string());
 
         download_retry(
-            cache.package.downloads.client.url.clone(),
+            store.package.downloads.client.url.clone(),
             &file_path,
             &self.reporter,
         )
@@ -144,7 +144,7 @@ impl<R: Reporter> Downloader for Instance<R> {
             //         .join("versions")
             //         .join(&self.config.version_name)
             //         .join(format!("{}.json", self.config.version_name)),
-            //     serde_json::to_string_pretty(&cache.package).unwrap(),
+            //     serde_json::to_string_pretty(&store.package).unwrap(),
             // )?
         } else {
             fs::write(
@@ -161,7 +161,7 @@ impl<R: Reporter> Downloader for Instance<R> {
                         .join(&self.config.version_name)
                         .join(format!("{}.json", self.config.version_name))
                 },
-                serde_json::to_string_pretty(&cache.package).unwrap(),
+                serde_json::to_string_pretty(&store.package).unwrap(),
             )?
         }
 
@@ -170,10 +170,10 @@ impl<R: Reporter> Downloader for Instance<R> {
         Ok(())
     }
 
-    async fn download_libraries(&self, cache: &MutexGuard<'_, Cache>) -> Result<()> {
+    async fn download_libraries(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
         R.set_message(t!("libraries_check").to_string());
 
-        for lib in &cache.package.libraries {
+        for lib in &store.package.libraries {
             if let Some(artifact) = &lib.downloads.artifact {
                 let file_path = self
                     .config
@@ -294,7 +294,7 @@ impl<R: Reporter> Downloader for Instance<R> {
         Ok(())
     }
 
-    async fn download_natives(&self, cache: &MutexGuard<'_, Cache>) -> Result<()> {
+    async fn download_natives(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
         let mut classifier_url = String::new();
 
         R.set_message(t!("natives_check").to_string());
@@ -311,7 +311,7 @@ impl<R: Reporter> Downloader for Instance<R> {
             }
         }
 
-        for lib in &cache.package.libraries {
+        for lib in &store.package.libraries {
             let mut mapping = &None;
             if let Some(classifiers) = &lib.downloads.classifiers {
                 if cfg!(target_os = "windows") {
