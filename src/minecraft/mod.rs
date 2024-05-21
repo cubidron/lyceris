@@ -7,7 +7,7 @@ use crate::{
     utils::json_from_file,
 };
 
-use ::serde::de::DeserializeOwned;
+use ::serde::{de::DeserializeOwned, Deserialize, Serialize};
 use directories::BaseDirs;
 use futures_util::lock::{Mutex, MutexGuard};
 use lazy_static::lazy_static;
@@ -61,6 +61,7 @@ pub enum Memory {
     Megabyte(u64, u64),
 }
 
+#[derive(Deserialize)]
 pub struct Config {
     // Authentication method. Default: Offline("Lyceris")
     pub authentication: AuthMethod,
