@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use sha1::digest::typenum::Min;
 
 use crate::network::{get, get_json};
@@ -49,7 +50,7 @@ impl ToString for MinecraftVersionBase {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize)]
 pub enum Custom {
     OptiFine(MinecraftVersionBase, String), 
     Forge(MinecraftVersionBase, String),
@@ -59,7 +60,7 @@ pub enum Custom {
 
 // Because of the ability to filter version types in the iteration of version manifest
 // We use Release, OldBeta, OldAlpha and Snapshot.
-#[derive(Clone)]
+#[derive(Clone,Deserialize)]
 pub enum MinecraftVersion {
     Release(MinecraftVersionBase),
     Custom(Custom),

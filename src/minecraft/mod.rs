@@ -45,7 +45,6 @@ pub mod downloader;
 pub mod java;
 pub mod serde;
 pub mod version;
-pub const LAUNCHER_API: &str = "https://launcher.baso.network";
 
 lazy_static! {
     static ref CACHE: Mutex<Cache> = Mutex::new(Cache {
@@ -55,7 +54,7 @@ lazy_static! {
         classpaths: None,
     });
 }
-
+#[derive(Deserialize)]
 pub enum Memory {
     Gigabyte(u16, u16),
     Megabyte(u64, u64),
@@ -99,6 +98,7 @@ impl Default for Config {
             let current_path = PathBuf::from(".minecraft");
             current_path
         };
+        
         Self {
             authentication: AuthMethod::Offline("Lyceris".to_string()),
             root_path: root_path.clone(),

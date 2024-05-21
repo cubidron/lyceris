@@ -1,12 +1,14 @@
 use std::{env, fmt::Display, path::{Path, PathBuf}, process::Command};
 
+use ::serde::Deserialize;
+
 use crate::{network::get_json, prelude::Result, utils::hash_file};
 
 use self::serde::{JavaManifest, JavaRuntime};
 
 mod serde;
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd,Deserialize)]
 pub enum JavaVersion {
     Gamma,
     Alpha,

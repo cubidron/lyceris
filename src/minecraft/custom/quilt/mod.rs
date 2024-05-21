@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use ::serde::Deserialize;
 use std::fs;
 
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
 use self::serde::{LoaderList, Package as QuiltPackage, VersionList};
 
 pub mod serde;
-#[derive(Clone,Default)]
+#[derive(Clone,Default,Deserialize)]
 
 pub struct Quilt {
     pub version: MinecraftVersionBase,

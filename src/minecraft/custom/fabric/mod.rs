@@ -1,5 +1,7 @@
 use std::fs;
 
+use ::serde::Deserialize;
+
 use crate::{
     error::FabricError,
     minecraft::{downloader::Downloader, serde::Package, version::MinecraftVersionBase},
@@ -11,7 +13,7 @@ use crate::{
 use self::serde::{LoaderList, Package as FabricPackage, VersionList};
 
 pub mod serde;
-#[derive(Clone,Default)]
+#[derive(Clone,Default,Deserialize)]
 
 pub struct Fabric {
     pub version: MinecraftVersionBase,
