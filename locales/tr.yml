@@ -1,9 +1,21 @@
-config_not_found: İşletim sisteminin konfigürasyon klasörü bulunamadı. %{path} yolu kullanılıyor
+config_not_found: Konfigürasyon dosyası bulunamadı. %{path} kullanılıyor.
 prepare: Oturum hazırlanıyor
-check: S %{name}
-install: Installing %{name}
-set : Setting %{name}
-download_missing: Downloading missing %{name}
-manifest_file_save: Saving manifest file at %{path}
-launching: Launching game
-max_memory_set: Max memory set to %{max} because of the available memory
+check_resources: Kaynaklar kontrol ediliyor
+download_missing_resources: Eksik kaynak dosyaları indiriliyor
+check_client: İstemci kontrol ediliyor
+install_client: İstemci kuruluyor
+check_libraries: Kitaplıklar kontrol ediliyor
+download_missing_libraries: Eksik kitaplıklar indiriliyor
+check_java: Java kontrol ediliyor
+download_missing_java: Eksik Java dosyaları kuruluyor
+check_natives: Natives dosyaları kontrol ediliyor
+download_missing_natives: Eksik natives dosyaları indiriliyor
+set_classpaths: Sınıf yolları ayarlanıyor
+set_arguments: Argümanlar ayarlanıyor
+launching: Oyunu başlatılıyor
+check_fabric: Fabric kontrol ediliyor
+download_missing_fabric: Eksik Fabric dosyaları indiriliyor
+check_quilt: Quilt kontrol ediliyor
+download_missing_quilt: Eksik Quilt dosyaları indiriliyor
+manifest_file_save: Manifest dosyası %{path} yoluna kaydediliyor
+max_memory_set: Maksimum bellek %{max}GB olarak ayarlandı 
