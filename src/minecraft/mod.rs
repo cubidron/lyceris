@@ -235,10 +235,6 @@ impl<R: Reporter> Instance<R> {
         Ok(())
     }
 
-    pub fn set_locale(&self, locale : &str){
-        rust_i18n::set_locale(locale);
-    }
-
     pub async fn launch(&mut self) -> Result<Child> {
         let mut store = STORE.lock().await;
 
