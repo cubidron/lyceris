@@ -34,14 +34,13 @@ pub trait Downloader {
     async fn download_libraries(&self, store: &MutexGuard<'_, Store>) -> Result<()>;
     async fn download_natives(&self, store: &MutexGuard<'_, Store>) -> Result<()>;
     async fn download_java(&self) -> Result<()>;
-    async fn install(&self, store: &MutexGuard<'_, Store>) -> Result<((), (), (), (), ())> {
-        try_join!(
-            self.download_client(store),
-            self.download_assets(store),
-            self.download_libraries(store),
-            self.download_natives(store),
-            self.download_java(),
-        )
+    async fn install(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
+        self.download_client(store).await?;
+        self.download_assets(store).await?;
+        self.download_libraries(store).await?;
+        self.download_natives(store).await?;
+        self.download_java().await?;
+        Ok(())
     }
 }
 #[async_trait]
