@@ -47,7 +47,7 @@ pub trait Downloader {
 #[async_trait]
 impl<R: Reporter> Downloader for Instance<R> {
     async fn download_assets(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
-        R.set_message(t!("resources_check").to_string());
+        self.reporter.send(Case::SetMessage((t!("resources_check").to_string())));
 
         let index = &store.index.clone();
 
@@ -81,7 +81,7 @@ impl<R: Reporter> Downloader for Instance<R> {
                     path: hash_path,
                 });
             } else {
-                R.set_message(t!("resources_download_missing").to_string());
+                self.reporter.send(Case::SetSubMessage((t!("resources_download_missing").to_string())));
                 download_retry(
                     format!(
                         "https://resources.download.minecraft.net/{sub_hash}/{}",
@@ -91,7 +91,7 @@ impl<R: Reporter> Downloader for Instance<R> {
                     &self.reporter,
                 )
                 .await?;
-                R.add_progress(1.0);
+                self.reporter.send(Case::AddProgress(1.0));
             }
         }
         let files = hash_files(files)?;
@@ -100,15 +100,14 @@ impl<R: Reporter> Downloader for Instance<R> {
             if !file.state {
                 download_retry(&file.url, &file.path, &self.reporter).await?;
             }
-            R.add_progress(1.0);
+            self.reporter.send(Case::AddProgress(1.0));
         }
 
         Ok(())
     }
 
     async fn download_client(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
-        R.set_message(t!("client_check").to_string());
-
+        self.reporter.send(Case::SetMessage((t!("client_check").to_string())));
         let file_path = if let Some(instance_path) = &self.config.instance_path {
             instance_path
                 .join(&self.config.instance_name)
@@ -124,12 +123,11 @@ impl<R: Reporter> Downloader for Instance<R> {
         };
 
         if file_path.is_file() && hash_file(&file_path)? == store.package.downloads.client.sha1 {
-            R.add_progress(1.0);
+            self.reporter.send(Case::AddProgress(1.0));
             return Ok(());
         }
 
-        R.set_message(t!("client_install").to_string());
-
+        self.reporter.send(Case::SetSubMessage((t!("client_install").to_string())));
         download_retry(
             store.package.downloads.client.url.clone(),
             &file_path,
@@ -171,7 +169,7 @@ impl<R: Reporter> Downloader for Instance<R> {
     }
 
     async fn download_libraries(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
-        R.set_message(t!("libraries_check").to_string());
+        self.reporter.send(Case::SetMessage((t!("libraries_check").to_string())));
 
         for lib in &store.package.libraries {
             if let Some(artifact) = &lib.downloads.artifact {
@@ -184,18 +182,18 @@ impl<R: Reporter> Downloader for Instance<R> {
                 if !self.parse_rule(lib)
                     && (!file_path.is_file() || hash_file(&file_path)? != artifact.sha1)
                 {
-                    R.set_message(t!("libraries_download_missing").to_string());
+                    self.reporter.send(Case::SetSubMessage((t!("libraries_download_missing").to_string())));
                     download_retry(&artifact.url, &file_path, &self.reporter).await?;
                 }
             }
-            R.add_progress(1.0);
+            self.reporter.send(Case::AddProgress(1.0));
         }
 
         if let super::version::MinecraftVersion::Custom(ext) = &self.config.version {
             match ext {
                 Custom::Fabric(v) => {
                     if let Some(package) = &v.package {
-                        R.set_message(t!("fabric_check").to_string());
+                        self.reporter.send(Case::SetMessage((t!("fabric_check").to_string())));
                         let mut progress = 0f64;
                         for i in &package.libraries {
                             let parts = i.name.split(':').collect::<Vec<&str>>();
@@ -218,20 +216,20 @@ impl<R: Reporter> Downloader for Instance<R> {
                                 .join(&file_name);
 
                             if !path.is_file() {
-                                R.set_message(t!("fabric_download_missing").to_string());
+                                self.reporter.send(Case::SetSubMessage((t!("download_missing",name="fabric").to_string())));
                                 download_retry(&url, &path, &self.reporter).await?;
                             } else if let Some(sha1) = &i.sha1 {
                                 if &hash_file(&path)? != sha1 {
                                     download_retry(&url, &path, &self.reporter).await?;
                                 }
                             }
-                            R.add_progress(1.0);
+                            self.reporter.send(Case::AddProgress(1.0));
                         }
                     }
                 }
                 Custom::Quilt(v) => {
                     if let Some(package) = &v.package {
-                        R.set_message(t!("quilt_check").to_string());
+                        self.reporter.send(Case::SetMessage((t!("check",name="quilt").to_string())));
                         let mut progress = 0f64;
                         for i in &package.libraries {
                             let parts = i.name.split(':').collect::<Vec<&str>>();
@@ -254,14 +252,14 @@ impl<R: Reporter> Downloader for Instance<R> {
                                 .join(&file_name);
 
                             if !path.is_file() {
-                                R.set_message(t!("quilt_download_missing").to_string());
+                                self.reporter.send(Case::SetSubMessage((t!("download_missing",name="quilt").to_string())));
                                 download_retry(&url, &path,&self.reporter).await?;
                             } else if let Some(sha1) = &i.sha1 {
                                 if &hash_file(&path)? != sha1 {
                                     download_retry(&url, &path,&self.reporter).await?;
                                 }
                             }
-                            R.add_progress(1.0);
+                            self.reporter.send(Case::AddProgress(1.0));
                         }
                     }
                 }
@@ -272,7 +270,7 @@ impl<R: Reporter> Downloader for Instance<R> {
     }
 
     async fn download_java(&self) -> Result<()> {
-        R.set_message(t!("java_check").to_string());
+        self.reporter.send(Case::SetMessage((t!("check",name="java").to_string())));
         let manifest = get_manifest_by_version(&self.config.java_version).await?;
         let java_path = self
             .config
@@ -282,13 +280,13 @@ impl<R: Reporter> Downloader for Instance<R> {
             let path = java_path.join(name);
             if let Some(downloads) = file.downloads {
                 if path.is_file() && hash_file(&path)? == downloads.raw.sha1 {
-                    R.add_progress(1.0);
+                    self.reporter.send(Case::AddProgress(1.0));
                     continue;
                 }
-                R.set_message(t!("java_download_missing").to_string());
+                self.reporter.send(Case::SetSubMessage((t!("download_missing",name="java").to_string())));
                 download_retry(&downloads.raw.url, &path,&self.reporter).await?;
             }
-            R.add_progress(1.0);
+            self.reporter.send(Case::AddProgress(1.0));
         }
 
         Ok(())
@@ -296,8 +294,7 @@ impl<R: Reporter> Downloader for Instance<R> {
 
     async fn download_natives(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
         let mut classifier_url = String::new();
-
-        R.set_message(t!("natives_check").to_string());
+        self.reporter.send(Case::SetMessage((t!("check",name="natives").to_string())));
         let natives_path = self
             .config
             .root_path
@@ -338,11 +335,11 @@ impl<R: Reporter> Downloader for Instance<R> {
             if !classifier_url.is_empty() {
                 fs::create_dir_all(&natives_path);
                 let native_file = natives_path.join("native.jar");
-                R.set_message(t!("natives_download_missing").to_string());
+                self.reporter.send(Case::SetSubMessage((t!("download_missing",name="natives").to_string())));
                 download_retry(&classifier_url, &native_file,&self.reporter).await?;
                 extract_zip(&native_file, &natives_path)?;
             }
-            R.add_progress(1.0);
+            self.reporter.send(Case::AddProgress(1.0));
         }
 
         Ok(())
