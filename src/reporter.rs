@@ -1,5 +1,9 @@
 pub trait Reporter : Clone + Send + Sync{
     fn send(&self, case : Case);
+
+    fn set_locale(&self, locale : &str){
+        rust_i18n::set_locale(locale);
+    }
 }
 
 pub trait Progress : Reporter{

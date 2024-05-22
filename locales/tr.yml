@@ -1,0 +1,9 @@
+config_not_found: İşletim sisteminin konfigürasyon klasörü bulunamadı. %{path} yolu kullanılıyor
+prepare: Oturum hazırlanıyor
+check: S %{name}
+install: Installing %{name}
+set : Setting %{name}
+download_missing: Downloading missing %{name}
+manifest_file_save: Saving manifest file at %{path}
+launching: Launching game
+max_memory_set: Max memory set to %{max} because of the available memory

@@ -101,7 +101,7 @@ impl Default for Config {
             let current_path = PathBuf::from(".minecraft");
             current_path
         };
-        
+
         Self {
             authentication: AuthMethod::Offline("Lyceris".to_string()),
             root_path: root_path.clone(),
@@ -357,7 +357,7 @@ impl<R: Reporter> Instance<R> {
         let classpaths = self.get_classpaths(store)?;
 
         self.reporter
-            .send(Case::SetMessage(t!("arguments_set").to_string()));
+            .send(Case::SetMessage(t!("set",name="arguments").to_string()));
 
         match &store.package.arguments {
             Some(arguments) => {
@@ -530,7 +530,7 @@ impl<R: Reporter> Instance<R> {
         let mut cp = String::new();
 
         self.reporter
-            .send(Case::SetMessage(t!("classpaths_set").to_string()));
+            .send(Case::SetMessage(t!("set",name="classpaths").to_string()));
 
         // Iterating through package libraries to find classpaths.
         for lib in &store.package.libraries {
