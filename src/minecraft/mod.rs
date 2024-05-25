@@ -276,9 +276,14 @@ impl<R: Reporter> Instance<R> {
             Ok(child)
         }
 
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(target_os = "linux")]
         {
-            let path = self.java_path.join("bin").join("javaw");
+            let path = self.config
+                    .java_path
+                    .join(self.config.java_version.to_string())
+                    .join("bin")
+                    .join("java");
+            println!("{:?}",path);
             let mut perms = fs::metadata(&path)?.permissions();
             perms.set_mode(0o755);
             fs::set_permissions(&path, perms)?;
@@ -288,7 +293,7 @@ impl<R: Reporter> Instance<R> {
                 } else {
                     self.config.root_path.clone()
                 })
-                .args(jvm)
+                .args(args)
                 .stdout(Stdio::piped())
                 .spawn()
                 .expect("Failed to launch game");
@@ -605,7 +610,7 @@ impl<R: Reporter> Instance<R> {
                                 .join(parts[1])
                                 .join(parts[2])
                                 .join(&file_name);
-                            cp.push_str(format!("{};", path.display()).as_str());
+                            cp.push_str(format!("{}{}", path.display(),CLASSPATH_SEPERATOR).as_str());
                             self.reporter.send(Case::AddProgress(1.0));
                         }
                     }
@@ -631,7 +636,7 @@ impl<R: Reporter> Instance<R> {
                                 .join(parts[1])
                                 .join(parts[2])
                                 .join(&file_name);
-                            cp.push_str(format!("{};", path.display()).as_str());
+                            cp.push_str(format!("{}{}", path.display(),CLASSPATH_SEPERATOR).as_str());
                             self.reporter.send(Case::AddProgress(1.0));
                         }
                     }

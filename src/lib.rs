@@ -50,18 +50,18 @@ mod tests {
         // //let config = Config{Config::default()};
         // // println!("{}",config.root_path.display());
         // // println!("{}",config.java_path.display());
-        // let mut launcher: Instance<TestReporter> = Instance::new(Config {
-        //     version: MinecraftVersion::Custom(
-        //         Custom::Quilt(Quilt::new((1, 20, Some(4)), "0.24.0".to_string()))
-        //     ),
-        //     ..Config::default()
-        // },Some(TestReporter{}));
-        // let mut p = launcher.launch().await.unwrap();
-        // let stdout = p.stdout.take().expect("no stdout");
+        let mut launcher: Instance<TestReporter> = Instance::new(Config {
+            version: MinecraftVersion::Custom(
+                Custom::Quilt(Quilt::new((1, 20, Some(4)), "0.24.0".to_string()))
+            ),
+            ..Config::default()
+        },Some(TestReporter{}));
+        let mut p = launcher.launch().await.unwrap();
+        let stdout = p.stdout.take().expect("no stdout");
 
-        // let mut lines = BufReader::new(stdout).lines();
-        // while let Some(line) = lines.next_line().await.unwrap() {
-        //     println!("{}", line);
-        // }
+        let mut lines = BufReader::new(stdout).lines();
+        while let Some(line) = lines.next_line().await.unwrap() {
+            println!("{}", line);
+        }
     }
 }
