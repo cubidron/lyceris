@@ -131,12 +131,8 @@ impl<R: Reporter> Instance<R> {
         self.reporter
             .send(Case::SetMessage(t!("prepare").to_string()));
 
-        create_dir_all(self
-            .config
-            .root_path
-            .join("assets")
-            .join("indexes")).ok();
-        
+        create_dir_all(self.config.root_path.join("assets").join("indexes")).ok();
+
         if store.package.id == String::default() {
             let version_manifest_path: PathBuf = self
                 .config
@@ -278,15 +274,41 @@ impl<R: Reporter> Instance<R> {
 
         #[cfg(target_os = "linux")]
         {
-            let path = self.config
-                    .java_path
-                    .join(self.config.java_version.to_string())
-                    .join("bin")
-                    .join("java");
-            println!("{:?}",path);
+            let path = self
+                .config
+                .java_path
+                .join(self.config.java_version.to_string())
+                .join("bin")
+                .join("java");
+            println!("{:?}", path);
             let mut perms = fs::metadata(&path)?.permissions();
             perms.set_mode(0o755);
             fs::set_permissions(&path, perms)?;
+            let child = Command::new(path)
+                .current_dir(if let Some(instance_path) = &self.config.instance_path {
+                    instance_path.join(&self.config.instance_name)
+                } else {
+                    self.config.root_path.clone()
+                })
+                .args(args)
+                .stdout(Stdio::piped())
+                .spawn()
+                .expect("Failed to launch game");
+
+            self.reporter.send(Case::RemoveProgress);
+            Ok(child)
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let path = self
+                .config
+                .java_path
+                .join(self.config.java_version.to_string())
+                .join("jre.bundle")
+                .join("Contents")
+                .join("Home")
+                .join("bin")
+                .join("java");
             let child = Command::new(path)
                 .current_dir(if let Some(instance_path) = &self.config.instance_path {
                     instance_path.join(&self.config.instance_name)
@@ -327,34 +349,36 @@ impl<R: Reporter> Instance<R> {
         false
     }
 
-    fn prepare_arguments(&self, store: &mut MutexGuard<'_, Store>) -> Result<Vec<String>> {
+    fn prepare_arguments(&mut self, store: &mut MutexGuard<'_, Store>) -> Result<Vec<String>> {
         let (mut game, mut jvm) = (Vec::<String>::new(), Vec::<String>::new());
-
+        jvm.append(&mut self.config.custom_java_args);
         let mut total_memory = sysinfo::System::new_all().available_memory();
         match self.config.memory {
             Memory::Gigabyte(mut min, mut max) => {
-                total_memory = (total_memory / 1024 / 1024 / 1024);
-                if max > total_memory as u16{
-                    max = total_memory as u16;
-                }
-                if min > max{
-                    min = max;
-                }
-                self.reporter
-                .send(Case::SetMessage(t!("max_memory_set", max = max).to_string()));
+                // total_memory = (total_memory / 1024 / 1024 / 1024);
+                // if max > total_memory as u16 {
+                //     max = total_memory as u16;
+                // }
+                // if min > max {
+                //     min = max;
+                // }
+                // self.reporter.send(Case::SetMessage(
+                //     t!("max_memory_set", max = max).to_string(),
+                // ));
                 jvm.push(format!("-Xms{}G", min));
                 jvm.push(format!("-Xmx{}G", max));
             }
-            Memory::Megabyte(mut min,mut max) => {
+            Memory::Megabyte(mut min, mut max) => {
                 total_memory = total_memory / 1024 / 1024;
-                if max > total_memory{
+                if max > total_memory {
                     max = total_memory;
                 }
-                if min > max{
+                if min > max {
                     min = max;
                 }
-                self.reporter
-                .send(Case::SetMessage(t!("max_memory_set", max = max).to_string()));
+                self.reporter.send(Case::SetMessage(
+                    t!("max_memory_set", max = max).to_string(),
+                ));
                 jvm.push(format!("-Xms{}M", min));
                 jvm.push(format!("-Xmx{}M", max));
             }
@@ -376,11 +400,16 @@ impl<R: Reporter> Instance<R> {
                             // todo authentication
                             "${auth_player_name}" => username.clone(),
                             "${version_name}" => self.config.version_name.clone(),
-                            "${game_directory}" => if let Some(instance_path) = &self.config.instance_path {
-                                instance_path.join(&self.config.instance_name).display().to_string()
-                            } else {
-                                self.config.root_path.display().to_string()
-                            },
+                            "${game_directory}" => {
+                                if let Some(instance_path) = &self.config.instance_path {
+                                    instance_path
+                                        .join(&self.config.instance_name)
+                                        .display()
+                                        .to_string()
+                                } else {
+                                    self.config.root_path.display().to_string()
+                                }
+                            }
                             "${assets_root}" => {
                                 self.config.root_path.join("assets").display().to_string()
                             }
@@ -481,11 +510,16 @@ impl<R: Reporter> Instance<R> {
                             // todo authentication
                             "${auth_player_name}" => username,
                             "${version_name}" => self.config.version_name.clone(),
-                            "${game_directory}" => if let Some(instance_path) = &self.config.instance_path {
-                                instance_path.join(&self.config.instance_name).display().to_string()
-                            } else {
-                                self.config.root_path.display().to_string()
-                            },
+                            "${game_directory}" => {
+                                if let Some(instance_path) = &self.config.instance_path {
+                                    instance_path
+                                        .join(&self.config.instance_name)
+                                        .display()
+                                        .to_string()
+                                } else {
+                                    self.config.root_path.display().to_string()
+                                }
+                            }
                             "${assets_root}" => {
                                 self.config.root_path.join("assets").display().to_string()
                             }
@@ -522,6 +556,7 @@ impl<R: Reporter> Instance<R> {
                 }
             },
         }
+        game.append(&mut self.config.custom_launch_args);
         jvm.append(&mut game);
 
         Ok(jvm)
@@ -610,7 +645,9 @@ impl<R: Reporter> Instance<R> {
                                 .join(parts[1])
                                 .join(parts[2])
                                 .join(&file_name);
-                            cp.push_str(format!("{}{}", path.display(),CLASSPATH_SEPERATOR).as_str());
+                            cp.push_str(
+                                format!("{}{}", path.display(), CLASSPATH_SEPERATOR).as_str(),
+                            );
                             self.reporter.send(Case::AddProgress(1.0));
                         }
                     }
@@ -636,7 +673,9 @@ impl<R: Reporter> Instance<R> {
                                 .join(parts[1])
                                 .join(parts[2])
                                 .join(&file_name);
-                            cp.push_str(format!("{}{}", path.display(),CLASSPATH_SEPERATOR).as_str());
+                            cp.push_str(
+                                format!("{}{}", path.display(), CLASSPATH_SEPERATOR).as_str(),
+                            );
                             self.reporter.send(Case::AddProgress(1.0));
                         }
                     }

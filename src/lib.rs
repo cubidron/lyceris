@@ -17,7 +17,7 @@ extern crate rust_i18n;
 
 i18n!("locales");
 
-pub fn set_locale(locale : &str){
+pub fn set_locale(locale: &str) {
     rust_i18n::set_locale(locale);
 }
 
@@ -30,18 +30,24 @@ mod tests {
     use crate::minecraft::version::Custom;
     use crate::minecraft::Config;
     use crate::network::post;
-    use crate::{ minecraft::{ version::MinecraftVersion, Instance }, reporter::Reporter };
+    use crate::{
+        minecraft::{version::MinecraftVersion, Instance},
+        reporter::Reporter,
+    };
     use reqwest::Body;
     use serde_json::{json, Value};
     use tokio::io::AsyncBufReadExt;
-    use tokio::{ io::{ AsyncWriteExt, BufReader }, test };
+    use tokio::{
+        io::{AsyncWriteExt, BufReader},
+        test,
+    };
 
     #[derive(Clone)]
-    struct TestReporter{}
+    struct TestReporter {}
 
-    impl Reporter for TestReporter{
-        fn send(&self, case : crate::reporter::Case) {
-            println!("{:?}",case);
+    impl Reporter for TestReporter {
+        fn send(&self, case: crate::reporter::Case) {
+            println!("{:?}", case);
         }
     }
 
@@ -50,12 +56,17 @@ mod tests {
         // //let config = Config{Config::default()};
         // // println!("{}",config.root_path.display());
         // // println!("{}",config.java_path.display());
-        let mut launcher: Instance<TestReporter> = Instance::new(Config {
-            version: MinecraftVersion::Custom(
-                Custom::Quilt(Quilt::new((1, 20, Some(4)), "0.24.0".to_string()))
-            ),
-            ..Config::default()
-        },Some(TestReporter{}));
+        let mut launcher: Instance<TestReporter> = Instance::new(
+            Config {
+                version: MinecraftVersion::Custom(Custom::Quilt(Quilt::new(
+                    (1, 20, Some(4)),
+                    "0.24.0".to_string(),
+                ))),
+                custom_java_args: vec!["-XstartOnFirstThread".to_string()],
+                ..Config::default()
+            },
+            Some(TestReporter {}),
+        );
         let mut p = launcher.launch().await.unwrap();
         let stdout = p.stdout.take().expect("no stdout");
 
