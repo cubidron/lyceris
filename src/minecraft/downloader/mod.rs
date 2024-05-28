@@ -52,6 +52,8 @@ impl<R: Reporter> Downloader for Instance<R> {
 
         let mut files: Vec<File> = vec![];
 
+        self.reporter.send(Case::SetMaxProgress(store.index.objects.len() as f64));
+
         for (key, object) in &index.objects {
             let sub_hash = &object.hash[0..2];
             let hash_path = if index.virtual_.is_some() {
@@ -107,6 +109,7 @@ impl<R: Reporter> Downloader for Instance<R> {
 
     async fn download_client(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
         self.reporter.send(Case::SetMessage((t!("check_client").to_string())));
+        self.reporter.send(Case::SetMaxProgress(1.0));
         let file_path = if let Some(instance_path) = &self.config.instance_path {
             instance_path
                 .join(&self.config.instance_name)
@@ -161,7 +164,7 @@ impl<R: Reporter> Downloader for Instance<R> {
                 serde_json::to_string_pretty(&store.package).unwrap(),
             )?
         }
-
+        self.reporter.send(Case::AddProgress(1.0));
         // ADD ELSE
 
         Ok(())
@@ -170,6 +173,7 @@ impl<R: Reporter> Downloader for Instance<R> {
     async fn download_libraries(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
         self.reporter.send(Case::SetMessage((t!("check_libraries").to_string())));
 
+        self.reporter.send(Case::SetMaxProgress(store.package.libraries.len() as f64));
         for lib in &store.package.libraries {
             if let Some(artifact) = &lib.downloads.artifact {
                 let file_path = self
@@ -193,6 +197,7 @@ impl<R: Reporter> Downloader for Instance<R> {
                 Custom::Fabric(v) => {
                     if let Some(package) = &v.package {
                         self.reporter.send(Case::SetMessage((t!("check_fabric").to_string())));
+                        self.reporter.send(Case::SetMaxProgress(package.libraries.len() as f64));
                         let mut progress = 0f64;
                         for i in &package.libraries {
                             let parts = i.name.split(':').collect::<Vec<&str>>();
@@ -229,6 +234,7 @@ impl<R: Reporter> Downloader for Instance<R> {
                 Custom::Quilt(v) => {
                     if let Some(package) = &v.package {
                         self.reporter.send(Case::SetMessage((t!("check_quilt").to_string())));
+                        self.reporter.send(Case::SetMaxProgress(package.libraries.len() as f64));
                         let mut progress = 0f64;
                         for i in &package.libraries {
                             let parts = i.name.split(':').collect::<Vec<&str>>();
@@ -275,6 +281,7 @@ impl<R: Reporter> Downloader for Instance<R> {
             .config
             .java_path
             .join(self.config.java_version.to_string());
+        self.reporter.send(Case::SetMaxProgress(manifest.files.len() as f64));
         for (name, file) in manifest.files {
             let path = java_path.join(name);
             if let Some(downloads) = file.downloads {
@@ -338,7 +345,6 @@ impl<R: Reporter> Downloader for Instance<R> {
                 download_retry(&classifier_url, &native_file,&self.reporter).await?;
                 extract_zip(&native_file, &natives_path)?;
             }
-            self.reporter.send(Case::AddProgress(1.0));
         }
 
         Ok(())
