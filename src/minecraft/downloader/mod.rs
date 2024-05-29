@@ -46,7 +46,7 @@ pub trait Downloader {
 #[async_trait]
 impl<R: Reporter> Downloader for Instance<R> {
     async fn download_assets(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
-        self.reporter.send(Case::SetMessage((t!("check_resources").to_string())));
+        self.reporter.send(Case::SetSubMessage((t!("check_resources").to_string())));
 
         let index = &store.index.clone();
 
@@ -109,7 +109,7 @@ impl<R: Reporter> Downloader for Instance<R> {
     }
 
     async fn download_client(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
-        self.reporter.send(Case::SetMessage((t!("check_client").to_string())));
+        self.reporter.send(Case::SetSubMessage((t!("check_client").to_string())));
         self.reporter.send(Case::SetProgress(0.0));
         self.reporter.send(Case::SetMaxProgress(1.0));
         let file_path = if let Some(instance_path) = &self.config.instance_path {
@@ -173,7 +173,7 @@ impl<R: Reporter> Downloader for Instance<R> {
     }
 
     async fn download_libraries(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
-        self.reporter.send(Case::SetMessage((t!("check_libraries").to_string())));
+        self.reporter.send(Case::SetSubMessage((t!("check_libraries").to_string())));
         self.reporter.send(Case::SetProgress(0.0));
         self.reporter.send(Case::SetMaxProgress(store.package.libraries.len() as f64));
         for lib in &store.package.libraries {
@@ -198,7 +198,7 @@ impl<R: Reporter> Downloader for Instance<R> {
             match ext {
                 Custom::Fabric(v) => {
                     if let Some(package) = &v.package {
-                        self.reporter.send(Case::SetMessage((t!("check_fabric").to_string())));
+                        self.reporter.send(Case::SetSubMessage((t!("check_fabric").to_string())));
                         self.reporter.send(Case::SetMaxProgress(package.libraries.len() as f64));
                         let mut progress = 0f64;
                         for i in &package.libraries {
@@ -235,7 +235,7 @@ impl<R: Reporter> Downloader for Instance<R> {
                 }
                 Custom::Quilt(v) => {
                     if let Some(package) = &v.package {
-                        self.reporter.send(Case::SetMessage((t!("check_quilt").to_string())));
+                        self.reporter.send(Case::SetSubMessage((t!("check_quilt").to_string())));
                         self.reporter.send(Case::SetMaxProgress(package.libraries.len() as f64));
                         let mut progress = 0f64;
                         for i in &package.libraries {
@@ -277,7 +277,7 @@ impl<R: Reporter> Downloader for Instance<R> {
     }
 
     async fn download_java(&self) -> Result<()> {
-        self.reporter.send(Case::SetMessage((t!("check_java").to_string())));
+        self.reporter.send(Case::SetSubMessage((t!("check_java").to_string())));
         self.reporter.send(Case::SetProgress(0.0));
         let manifest = get_manifest_by_version(&self.config.java_version).await?;
         let java_path = self
@@ -303,7 +303,7 @@ impl<R: Reporter> Downloader for Instance<R> {
 
     async fn download_natives(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
         let mut classifier_url = String::new();
-        self.reporter.send(Case::SetMessage((t!("check_natives").to_string())));
+        self.reporter.send(Case::SetSubMessage((t!("check_natives").to_string())));
         let natives_path = self
             .config
             .root_path

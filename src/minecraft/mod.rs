@@ -355,16 +355,6 @@ impl<R: Reporter> Instance<R> {
         let mut total_memory = sysinfo::System::new_all().available_memory();
         match self.config.memory {
             Memory::Gigabyte(mut min, mut max) => {
-                // total_memory = (total_memory / 1024 / 1024 / 1024);
-                // if max > total_memory as u16 {
-                //     max = total_memory as u16;
-                // }
-                // if min > max {
-                //     min = max;
-                // }
-                // self.reporter.send(Case::SetMessage(
-                //     t!("max_memory_set", max = max).to_string(),
-                // ));
                 jvm.push(format!("-Xms{}G", min));
                 jvm.push(format!("-Xmx{}G", max));
             }
@@ -376,9 +366,6 @@ impl<R: Reporter> Instance<R> {
                 if min > max {
                     min = max;
                 }
-                self.reporter.send(Case::SetMessage(
-                    t!("max_memory_set", max = max).to_string(),
-                ));
                 jvm.push(format!("-Xms{}M", min));
                 jvm.push(format!("-Xmx{}M", max));
             }
@@ -386,7 +373,7 @@ impl<R: Reporter> Instance<R> {
         let classpaths = self.get_classpaths(store)?;
 
         self.reporter
-            .send(Case::SetMessage(t!("set_arguments").to_string()));
+            .send(Case::SetSubMessage(t!("set_arguments").to_string()));
 
         match &store.package.arguments {
             Some(arguments) => {
@@ -570,7 +557,7 @@ impl<R: Reporter> Instance<R> {
         let mut cp = String::new();
 
         self.reporter
-            .send(Case::SetMessage(t!("set_classpaths").to_string()));
+            .send(Case::SetSubMessage(t!("set_classpaths").to_string()));
 
         // Iterating through package libraries to find classpaths.
         for lib in &store.package.libraries {
@@ -619,7 +606,6 @@ impl<R: Reporter> Instance<R> {
                     );
                 }
             }
-            self.reporter.send(Case::AddProgress(1.0));
         }
 
         if let MinecraftVersion::Custom(ext) = &self.config.version {
@@ -648,7 +634,6 @@ impl<R: Reporter> Instance<R> {
                             cp.push_str(
                                 format!("{}{}", path.display(), CLASSPATH_SEPERATOR).as_str(),
                             );
-                            self.reporter.send(Case::AddProgress(1.0));
                         }
                     }
                 }
@@ -676,7 +661,6 @@ impl<R: Reporter> Instance<R> {
                             cp.push_str(
                                 format!("{}{}", path.display(), CLASSPATH_SEPERATOR).as_str(),
                             );
-                            self.reporter.send(Case::AddProgress(1.0));
                         }
                     }
                 }
