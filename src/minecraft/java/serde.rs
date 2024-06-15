@@ -42,6 +42,9 @@ pub struct Gamecore {
     #[serde(rename = "java-runtime-gamma-snapshot")]
     pub java_runtime_gamma_snapshot: Vec<JavaRuntimeVersion>,
 
+    #[serde(rename = "java-runtime-delta")]
+    pub java_runtime_delta : Vec<JavaRuntimeVersion>,
+
     #[serde(rename = "jre-legacy")]
     pub jre_legacy: Vec<JavaRuntimeVersion>,
 
@@ -143,6 +146,7 @@ impl Index<&str> for Gamecore{
             "java-runtime-beta" => &self.java_runtime_beta[0],
             "java-runtime-gamma" => &self.java_runtime_gamma[0],
             "java-runtime-gamma-snapshot" => &self.java_runtime_gamma_snapshot[0],
+            "java-runtime-delta" => &self.java_runtime_delta[0],
             "jre-legacy" => &self.jre_legacy[0],
             _ => panic!("Unsupported Java Type"),
         }
