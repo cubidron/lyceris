@@ -33,7 +33,7 @@ static CLIENT: Lazy<Client> = Lazy::new(|| {
 ///
 /// Retries the request if it fails with the given amount of retries (default = 3).
 pub async fn get(url: impl IntoUrl) -> Result<Response> {
-    Ok(retry(|| CLIENT.get(url.as_str()).send(), reqwest::Result::is_ok).await?)
+    Ok(retry(|| CLIENT.get(url.as_str()).header("Cache-Control", "no-cache, no-store, must-revalidate").send(), reqwest::Result::is_ok).await?)
 }
 
 /// Sends a POST request to the given URL with payload.
