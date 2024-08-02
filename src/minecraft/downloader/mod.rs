@@ -9,7 +9,7 @@ use tokio::try_join;
 
 use crate::{
     network::download_retry,
-    prelude::{Result, R},
+    prelude::Result,
     reporter::{Case, Progress, Reporter},
     utils::{extract_zip, hash_file, hash_files},
 };

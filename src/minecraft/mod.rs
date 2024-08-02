@@ -2,7 +2,7 @@ use crate::{
     error::Error,
     minecraft::{auth::AuthMethod, version::ToString},
     network::{download_retry, get, get_json},
-    prelude::{Result, CLASSPATH_SEPERATOR, R},
+    prelude::{Result, CLASSPATH_SEPERATOR},
     reporter::{Case, Reporter},
     utils::json_from_file,
 };
