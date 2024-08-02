@@ -53,7 +53,7 @@ impl<R: Reporter> Downloader for Instance<R> {
 
         let mut files: Vec<File> = vec![];
 
-        self.reporter.send(Case::SetProgress(0.0));
+        self.reporter.send(Case::ClearProgress);
         self.reporter
             .send(Case::SetMaxProgress(store.index.objects.len() as f64));
 
@@ -115,7 +115,7 @@ impl<R: Reporter> Downloader for Instance<R> {
     async fn download_client(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
         self.reporter
             .send(Case::SetSubMessage((t!("check_client").to_string())));
-        self.reporter.send(Case::SetProgress(0.0));
+        self.reporter.send(Case::ClearProgress);
         self.reporter.send(Case::SetMaxProgress(1.0));
         let file_path = self
             .config
@@ -158,7 +158,7 @@ impl<R: Reporter> Downloader for Instance<R> {
     async fn download_libraries(&self, store: &MutexGuard<'_, Store>) -> Result<()> {
         self.reporter
             .send(Case::SetSubMessage((t!("check_libraries").to_string())));
-        self.reporter.send(Case::SetProgress(0.0));
+        self.reporter.send(Case::ClearProgress);
         self.reporter
             .send(Case::SetMaxProgress(store.package.libraries.len() as f64));
         for lib in &store.package.libraries {
@@ -274,7 +274,7 @@ impl<R: Reporter> Downloader for Instance<R> {
     async fn download_java(&self) -> Result<()> {
         self.reporter
             .send(Case::SetSubMessage((t!("check_java").to_string())));
-        self.reporter.send(Case::SetProgress(0.0));
+        self.reporter.send(Case::ClearProgress);
         let manifest = get_manifest_by_version(&self.config.java_version).await?;
         let java_path = self
             .config

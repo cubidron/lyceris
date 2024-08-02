@@ -42,6 +42,9 @@ pub trait Progress : Reporter{
     fn remove_progress(self) {
         self.send(Case::RemoveProgress);
     }
+    fn clear_progress(self) {
+        self.send(Case::ClearProgress);
+    }
 }
 
 impl<R : Reporter> Progress for R {}
@@ -73,6 +76,7 @@ pub enum Case{
     AddProgress(f64),
     AddSubProgress(f64),
     SetLoadingProgress,
+    ClearProgress,
     HideProgress,
     RemoveProgress
 }
