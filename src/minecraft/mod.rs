@@ -34,7 +34,7 @@ use self::{
     custom::fabric::{get_package_by_version, Fabric},
     downloader::Downloader,
     java::JavaVersion,
-    serde::{Action, GameElement, Index, Library, Name, Package, VersionManifest},
+    json::{Action, GameElement, Index, Library, Name, Package, VersionManifest},
     version::{Custom, MinecraftVersion, VERSION_MANIFEST_URL},
 };
 
@@ -42,7 +42,7 @@ pub mod auth;
 pub mod custom;
 pub mod downloader;
 pub mod java;
-pub mod serde;
+pub mod json;
 pub mod version;
 
 lazy_static! {
@@ -412,7 +412,7 @@ impl<R: Reporter> Instance<R> {
                     }
                 }
                 for argument in &arguments.jvm {
-                    if let serde::JvmElement::String(mut string) = argument.clone() {
+                    if let json::JvmElement::String(mut string) = argument.clone() {
                         if string.contains("${natives_directory}") {
                             string = string.replace(
                                 "${natives_directory}",

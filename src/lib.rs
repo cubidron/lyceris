@@ -53,9 +53,6 @@ mod tests {
 
     #[test]
     async fn test_launch() {
-        // //let config = Config{Config::default()};
-        // // println!("{}",config.root_path.display());
-        // // println!("{}",config.java_path.display());
         let mut launcher: Instance<TestReporter> = Instance::new(
             Config {
                 version: MinecraftVersion::Custom(Custom::Quilt(Quilt::new(

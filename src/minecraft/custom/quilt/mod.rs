@@ -4,15 +4,15 @@ use std::fs;
 
 use crate::{
     error::{FabricError, QuiltError},
-    minecraft::{downloader::Downloader, serde::Package, version::MinecraftVersionBase},
+    minecraft::{downloader::Downloader, json::Package, version::MinecraftVersionBase},
     network::get_json,
     prelude::Result,
     reporter::Reporter,
 };
 
-use self::serde::{LoaderList, Package as QuiltPackage, VersionList};
+use self::json::{LoaderList, Package as QuiltPackage, VersionList};
 
-pub mod serde;
+pub mod json;
 #[derive(Clone,Default,Deserialize)]
 
 pub struct Quilt {

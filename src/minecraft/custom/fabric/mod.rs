@@ -4,7 +4,7 @@ use ::serde::Deserialize;
 
 use crate::{
     error::FabricError,
-    minecraft::{downloader::Downloader, serde::Package, version::MinecraftVersionBase},
+    minecraft::{downloader::Downloader, json::Package, version::MinecraftVersionBase},
     network::get_json,
     prelude::Result,
     reporter::Reporter,

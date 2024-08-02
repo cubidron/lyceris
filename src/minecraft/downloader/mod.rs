@@ -139,14 +139,7 @@ impl<R: Reporter> Downloader for Instance<R> {
         .await?;
 
         if let MinecraftVersion::Custom(_) = self.config.version {
-            // fs::write(
-            //     self.config
-            //         .root_path
-            //         .join("versions")
-            //         .join(&self.config.version_name)
-            //         .join(format!("{}.json", self.config.version_name)),
-            //     serde_json::to_string_pretty(&store.package).unwrap(),
-            // )?
+            // todo: Implement a different logic in here
         } else {
             fs::write(
                 self.config
@@ -158,7 +151,6 @@ impl<R: Reporter> Downloader for Instance<R> {
             )?
         }
         self.reporter.send(Case::AddProgress(1.0));
-        // ADD ELSE
 
         Ok(())
     }

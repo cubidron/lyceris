@@ -9,9 +9,9 @@ use ::serde::Deserialize;
 
 use crate::{network::get_json, prelude::Result, utils::hash_file};
 
-use self::serde::{JavaManifest, JavaRuntime};
+use self::json::{JavaManifest, JavaRuntime};
 
-mod serde;
+mod json;
 
 #[derive(Debug, PartialEq, PartialOrd, Deserialize)]
 pub enum JavaVersion {

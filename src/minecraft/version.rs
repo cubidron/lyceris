@@ -5,7 +5,7 @@ use crate::network::{get, get_json};
 
 use super::{
     // custom::fabric::FabricVersion,
-    custom::{fabric::Fabric, quilt::Quilt}, java::JavaVersion, serde::{Type, VersionManifest}
+    custom::{fabric::Fabric, quilt::Quilt}, java::JavaVersion, json::{Type, VersionManifest}
 };
 
 use core::fmt;
