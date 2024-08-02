@@ -1,16 +1,11 @@
-//! A Core Library of Cardinal Systems.
-//! It only includes minecraft launcher library for now.
-//!
-//! DOWNLOAD PARALLELISM IS NOT IMPLEMENTED YET.
-//! ERROR HANDLING IS NOT IMPROVISED YET.
 #![allow(unused)]
 
 pub mod error;
 pub mod minecraft;
 pub mod network;
-mod prelude;
 pub mod reporter;
 pub mod utils;
+mod prelude;
 
 #[macro_use]
 extern crate rust_i18n;
@@ -53,7 +48,7 @@ mod tests {
 
     #[test]
     async fn test_launch() {
-        let mut launcher: Instance<TestReporter> = Instance::new(
+        let mut launcher = Instance::new(
             Config {
                 version: MinecraftVersion::Custom(Custom::Quilt(Quilt::new(
                     (1, 20, Some(4)),
