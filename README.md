@@ -1,2 +1,2 @@
 # lyceris
-An open source launcher library of Cardinal systems.
+An open source minecraft launcher library.
