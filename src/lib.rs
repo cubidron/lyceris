@@ -59,7 +59,7 @@ mod tests {
                     (1, 20, Some(4)),
                     "0.24.0".to_string(),
                 ))),
-                custom_java_args: vec!["-XstartOnFirstThread".to_string()],
+                //custom_java_args: vec!["-XstartOnFirstThread".to_string()],
                 ..Config::default()
             },
             Some(TestReporter {}),

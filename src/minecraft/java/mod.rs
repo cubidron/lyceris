@@ -62,7 +62,7 @@ pub fn get_java_path() -> Option<PathBuf> {
             }
             None
         }
-        Err(e) => None,
+        Err(_) => None,
     }
 }
 pub fn detect_java_by_cmd() -> Option<JavaVersion> {
@@ -89,7 +89,7 @@ pub fn detect_java_by_cmd() -> Option<JavaVersion> {
             }
             None
         }
-        Err(e) => None,
+        Err(_) => None,
     }
 }
 

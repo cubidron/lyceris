@@ -98,8 +98,8 @@ impl Default for Config {
         let root_path = if let Some(base_dirs) = directories::BaseDirs::new() {
             base_dirs.config_dir().join(".minecraft")
         } else {
-            let current_path = PathBuf::from(".minecraft");
-            current_path
+            
+            PathBuf::from(".minecraft")
         };
 
         Self {
@@ -354,7 +354,7 @@ impl<R: Reporter> Instance<R> {
         jvm.append(&mut self.config.custom_java_args);
         let mut total_memory = sysinfo::System::new_all().available_memory();
         match self.config.memory {
-            Memory::Gigabyte(mut min, mut max) => {
+            Memory::Gigabyte(min, max) => {
                 jvm.push(format!("-Xms{}G", min));
                 jvm.push(format!("-Xmx{}G", max));
             }
@@ -491,7 +491,7 @@ impl<R: Reporter> Instance<R> {
                     for arg in arguments {
                         let username = match &self.config.authentication {
                             AuthMethod::Offline(offline_user) => offline_user.to_string(),
-                            AuthMethod::Online(microsoft_user) => unimplemented!(),
+                            AuthMethod::Online(_) => unimplemented!(),
                         };
                         game.push(match arg.as_str() {
                             // todo authentication
@@ -519,7 +519,7 @@ impl<R: Reporter> Instance<R> {
                             "${version_type}" => "release".to_string(),
                             "${user_properties}" => "{}".to_string(),
                             "${game_assets}" => match &self.config.version {
-                                MinecraftVersion::Release((_, v1, v2)) => {
+                                MinecraftVersion::Release((_, v1, _)) => {
                                     if v1 < &8 {
                                         self.config
                                             .root_path
@@ -615,14 +615,6 @@ impl<R: Reporter> Instance<R> {
                         for i in &package.libraries {
                             let parts = i.name.split(':').collect::<Vec<&str>>();
                             let file_name = format!("{}-{}.jar", parts[1], parts[2]);
-                            let url = format!(
-                                "{}{}/{}/{}/{}",
-                                i.url,
-                                parts[0].replace('.', "/"),
-                                parts[1],
-                                parts[2],
-                                file_name
-                            );
                             let path = self
                                 .config
                                 .root_path
@@ -642,14 +634,6 @@ impl<R: Reporter> Instance<R> {
                         for i in &package.libraries {
                             let parts = i.name.split(':').collect::<Vec<&str>>();
                             let file_name = format!("{}-{}.jar", parts[1], parts[2]);
-                            let url = format!(
-                                "{}{}/{}/{}/{}",
-                                i.url,
-                                parts[0].replace('.', "/"),
-                                parts[1],
-                                parts[2],
-                                file_name
-                            );
                             let path = self
                                 .config
                                 .root_path

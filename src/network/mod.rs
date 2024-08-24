@@ -55,7 +55,7 @@ pub async fn download_retry<R: Reporter>(
     path: &impl AsRef<Path>,
     reporter: &Option<R>,
 ) -> Result<()> {
-    retry(|| download(url.as_str(), path, &reporter), Result::is_ok).await
+    retry(|| download(url.as_str(), path, reporter), Result::is_ok).await
 }
 
 /// Download file from the given URL to the destination path.
