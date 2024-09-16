@@ -141,18 +141,12 @@ impl<R: Reporter> Instance<R> {
                 .join("indexes")
                 .join("version_manifest.json");
 
-            let version_manifest = if version_manifest_path.is_file() {
-                json_from_file(version_manifest_path)?
-            } else {
-                let manifest = get_json::<VersionManifest>(VERSION_MANIFEST_URL).await?;
-                let mut file = File::create(&version_manifest_path)?;
-                self.reporter.send(Case::SetSubMessage(
-                    t!("manifest_file_save", path = version_manifest_path.display()).to_string(),
-                ));
-                file.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes())?;
-                manifest
-            };
-
+            let manifest = get_json::<VersionManifest>(VERSION_MANIFEST_URL).await?;
+            let mut file = File::create(&version_manifest_path)?;
+            self.reporter.send(Case::SetSubMessage(
+                t!("manifest_file_save", path = version_manifest_path.display()).to_string(),
+            ));
+            file.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes())?;
             if let MinecraftVersion::Custom(ext) = &mut self.config.version {
                 match ext {
                     Custom::Fabric(v) => {
@@ -188,7 +182,7 @@ impl<R: Reporter> Instance<R> {
             }
 
             let package = get_json(
-                &version_manifest
+                &manifest
                     .clone()
                     .versions
                     .into_iter()
@@ -200,7 +194,7 @@ impl<R: Reporter> Instance<R> {
 
             {
                 store.package = package;
-                store.version_manifest = version_manifest;
+                store.version_manifest = manifest;
             }
         }
 
