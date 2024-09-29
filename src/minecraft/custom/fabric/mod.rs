@@ -10,9 +10,9 @@ use crate::{
     reporter::Reporter,
 };
 
-use self::serde::{LoaderList, Package as FabricPackage, VersionList};
+use self::json::{LoaderList, Package as FabricPackage, VersionList};
 
-pub mod serde;
+pub mod json;
 #[derive(Clone,Default,Deserialize)]
 
 pub struct Fabric {

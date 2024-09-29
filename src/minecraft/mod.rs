@@ -1,12 +1,12 @@
 use crate::{
     error::Error,
-    minecraft::{auth::AuthMethod, version::ToString},
+    minecraft::{version::ToString},
     network::{download_retry, get, get_json},
     prelude::{Result, CLASSPATH_SEPERATOR},
     reporter::{Case, Reporter},
     utils::json_from_file,
 };
-
+use auth::AuthMethod;
 use ::serde::{de::DeserializeOwned, Deserialize, Serialize};
 use directories::BaseDirs;
 use futures_util::lock::{Mutex, MutexGuard};
@@ -180,9 +180,9 @@ impl<R: Reporter> Instance<R> {
                         self.config.version =
                             MinecraftVersion::Custom(Custom::OptiFine(custom::optifine::OptiFine {
                                 version: v.version,
-                                jar_path: v.jar_path,
-                                json_path: v.json_path,
-                                package: Some(json_from_file(v.json_path)?),
+                                jar_path: v.jar_path.clone(),
+                                json_path: v.json_path.clone(),
+                                package: Some(json_from_file(&v.json_path)?),
                             }))
                     }
                     _ => unimplemented!(),
@@ -433,29 +433,16 @@ impl<R: Reporter> Instance<R> {
                                 string.replace("${launcher_version}", env!("CARGO_PKG_VERSION"));
                         } else if string.contains("${classpath}") {
                             string = string.replace("${classpath}", classpaths.as_str());
-                            if let MinecraftVersion::Custom(ext) = &self.config.version {
-                                match ext {
-                                    Custom::OptiFine(v) => {
-                                      string.push_str(
-                                        &v.jar_path
-                                          .display()
-                                          .to_string()
-                                      );
-                                    }
-                                    _ => {
-                                      string.push_str(
-                                          &self
-                                            .config
-                                            .root_path
-                                            .join("versions")
-                                            .join(&self.config.version_name)
-                                            .join(format!("{}.jar", self.config.version_name))
-                                            .display()
-                                            .to_string(),
-                                      );
-                                    }
-                                }
-                            }
+                            string.push_str(
+                                &self
+                                  .config
+                                  .root_path
+                                  .join("versions")
+                                  .join(&self.config.version_name)
+                                  .join(format!("{}.jar", self.config.version_name))
+                                  .display()
+                                  .to_string(),
+                            );
                         }
                         jvm.push(string);
                     }
@@ -475,6 +462,9 @@ impl<R: Reporter> Instance<R> {
                         Custom::OptiFine(v) => {
                             if let Some(package) = &v.package {
                                 jvm.push(package.main_class.clone());
+                                for argument in &package.arguments.game{
+                                    game.push(argument.to_string());
+                                }
                             }
                         }
                         _ => unimplemented!(),
@@ -563,6 +553,7 @@ impl<R: Reporter> Instance<R> {
                 }
             },
         }
+        
         game.append(&mut self.config.custom_launch_args);
         jvm.append(&mut game);
 
@@ -650,6 +641,25 @@ impl<R: Reporter> Instance<R> {
                     }
                 }
                 Custom::Quilt(v) => {
+                    if let Some(package) = &v.package {
+                        for i in &package.libraries {
+                            let parts = i.name.split(':').collect::<Vec<&str>>();
+                            let file_name = format!("{}-{}.jar", parts[1], parts[2]);
+                            let path = self
+                                .config
+                                .root_path
+                                .join("libraries")
+                                .join(parts[0].replace('.', std::path::MAIN_SEPARATOR_STR))
+                                .join(parts[1])
+                                .join(parts[2])
+                                .join(&file_name);
+                            cp.push_str(
+                                format!("{}{}", path.display(), CLASSPATH_SEPERATOR).as_str(),
+                            );
+                        }
+                    }
+                }
+                Custom::OptiFine(v) => {
                     if let Some(package) = &v.package {
                         for i in &package.libraries {
                             let parts = i.name.split(':').collect::<Vec<&str>>();

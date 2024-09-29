@@ -264,6 +264,9 @@ impl<R: Reporter> Downloader for Instance<R> {
                             self.reporter.send(Case::AddProgress(1.0));
                         }
                     }
+                },
+                Custom::OptiFine(v)=> {
+                    &v.generate_files(&self.config.root_path)?;
                 }
                 _ => unimplemented!(),
             }

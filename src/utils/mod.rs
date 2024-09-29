@@ -78,6 +78,48 @@ pub fn extract_zip(
     Ok(())
 }
 
+pub fn read_file_from_jar(jar_path: &PathBuf, file_name: &str) -> Result<String> {
+    // Open the JAR (ZIP) file
+    let file = File::open(jar_path)?;
+    let reader = BufReader::new(file);
+
+    // Create a ZipArchive from the reader
+    let mut archive = ZipArchive::new(reader)?;
+
+    // Iterate through the files in the archive to find the specific file
+    for i in 0..archive.len() {
+        let mut zip_file = archive.by_index(i)?;
+        if zip_file.name() == file_name {
+            // Read the contents of the file
+            let mut file_contents = String::new();
+            zip_file.read_to_string(&mut file_contents)?;
+            return Ok(file_contents);
+        }
+    }
+
+    Err(format!("File '{}' not found in the JAR", file_name).into())
+}
+
+pub fn extract_file_from_jar(jar_path: &PathBuf, file_name: &str, output_path: &PathBuf) -> Result<()> {
+    let file = File::open(jar_path)?;
+    let reader = BufReader::new(file);
+
+    let mut archive = ZipArchive::new(reader)?;
+
+    for i in 0..archive.len() {
+        let mut zip_file = archive.by_index(i)?;
+        if zip_file.name() == file_name {
+            let output_file_path = Path::new(output_path);
+            let mut output_file = File::create(&output_file_path)?;
+
+            std::io::copy(&mut zip_file, &mut output_file)?;
+            return Ok(());
+        }
+    }
+
+    Err(format!("File '{}' not found in the JAR", file_name).into())
+}
+
 pub fn recurse_files(path: impl AsRef<Path>) -> std::io::Result<HashSet<PathBuf>> {
     let mut buf:HashSet<PathBuf> = HashSet::new();
     let entries = read_dir(path)?;

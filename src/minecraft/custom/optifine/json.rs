@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Package {
     #[serde(rename = "id")]
     pub id: String,
@@ -24,14 +24,14 @@ pub struct Package {
     pub arguments: Arguments,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Arguments {
     #[serde(rename = "game")]
-    game: Vec<String>,
+    pub game: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Library {
     #[serde(rename = "name")]
-    name: String,
+    pub name: String,
 }

@@ -26,6 +26,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::minecraft::custom::fabric::Fabric;
+    use crate::minecraft::custom::optifine::OptiFine;
     use crate::minecraft::custom::quilt::Quilt;
     use crate::minecraft::version::Custom;
     use crate::minecraft::Config;
@@ -55,10 +56,14 @@ mod tests {
     async fn test_launch() {
         let mut launcher: Instance<TestReporter> = Instance::new(
             Config {
-                version: MinecraftVersion::Custom(Custom::Quilt(Quilt::new(
-                    (1, 20, Some(4)),
-                    "0.24.0".to_string(),
+                version: MinecraftVersion::Custom(Custom::OptiFine(OptiFine::new(
+                    (1, 21, Some(1)),
+                    PathBuf::from("C:\\Users\\batuh\\AppData\\Roaming\\.minecraft\\libraries\\optifine\\OptiFine\\1.21.1_HD_U_J1\\OptiFine-1.21.1_HD_U_J1.jar"),
+                    PathBuf::from("C:\\Users\\batuh\\AppData\\Roaming\\.minecraft\\versions\\1.21.1-OptiFine_HD_U_J1\\1.21.1-OptiFine_HD_U_J1.json"),
+                    None
                 ))),
+                java_version: crate::minecraft::java::JavaVersion::Delta,
+                root_path: PathBuf::from("C:\\Users\\batuh\\AppData\\Roaming\\.basonw"),
                 //custom_java_args: vec!["-XstartOnFirstThread".to_string()],
                 ..Config::default()
             },

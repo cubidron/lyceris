@@ -16,7 +16,9 @@ pub enum Error{
     #[error("Fabric error occured : {0}")]
     FabricError(FabricError),
     #[error("Quilt error occured : {0}")]
-    QuiltError(QuiltError)
+    QuiltError(QuiltError),
+    #[error("Unknown error: {0}")]
+    UnknownError(String)
 }
 
 #[derive(Debug)]
@@ -27,6 +29,12 @@ pub enum FabricError{
 #[derive(Debug)]
 pub enum QuiltError{
     PackageNotFound
+}
+
+impl From<String> for Error {
+    fn from(value: String) -> Self {
+        Self::UnknownError(value)
+    }
 }
 
 impl fmt::Display for FabricError{
