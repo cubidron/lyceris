@@ -98,7 +98,6 @@ impl Default for Config {
         let root_path = if let Some(base_dirs) = directories::BaseDirs::new() {
             base_dirs.config_dir().join(".minecraft")
         } else {
-            
             PathBuf::from(".minecraft")
         };
 
@@ -176,6 +175,15 @@ impl<R: Reporter> Instance<R> {
                                     .await?,
                                 ),
                             }));
+                    }
+                    Custom::OptiFine(v) => {
+                        self.config.version =
+                            MinecraftVersion::Custom(Custom::OptiFine(custom::optifine::OptiFine {
+                                version: v.version,
+                                jar_path: v.jar_path,
+                                json_path: v.json_path,
+                                package: Some(json_from_file(v.json_path)?),
+                            }))
                     }
                     _ => unimplemented!(),
                 }
@@ -425,16 +433,29 @@ impl<R: Reporter> Instance<R> {
                                 string.replace("${launcher_version}", env!("CARGO_PKG_VERSION"));
                         } else if string.contains("${classpath}") {
                             string = string.replace("${classpath}", classpaths.as_str());
-                            string.push_str(
-                                &self
-                                    .config
-                                    .root_path
-                                    .join("versions")
-                                    .join(&self.config.version_name)
-                                    .join(format!("{}.jar", self.config.version_name))
-                                    .display()
-                                    .to_string(),
-                            );
+                            if let MinecraftVersion::Custom(ext) = &self.config.version {
+                                match ext {
+                                    Custom::OptiFine(v) => {
+                                      string.push_str(
+                                        &v.jar_path
+                                          .display()
+                                          .to_string()
+                                      );
+                                    }
+                                    _ => {
+                                      string.push_str(
+                                          &self
+                                            .config
+                                            .root_path
+                                            .join("versions")
+                                            .join(&self.config.version_name)
+                                            .join(format!("{}.jar", self.config.version_name))
+                                            .display()
+                                            .to_string(),
+                                      );
+                                    }
+                                }
+                            }
                         }
                         jvm.push(string);
                     }
@@ -447,6 +468,11 @@ impl<R: Reporter> Instance<R> {
                             }
                         }
                         Custom::Quilt(v) => {
+                            if let Some(package) = &v.package {
+                                jvm.push(package.main_class.clone());
+                            }
+                        }
+                        Custom::OptiFine(v) => {
                             if let Some(package) = &v.package {
                                 jvm.push(package.main_class.clone());
                             }
