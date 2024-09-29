@@ -102,9 +102,6 @@ impl<R: Reporter> Downloader for Instance<R> {
         }
         let files = hash_files(files)?;
 
-        self.reporter
-        .send(Case::SetMaxProgress(files.len() as f64));
-
         for file in files {
             if !file.state {
                 download_retry(&file.url, &file.path, &self.reporter).await?;
