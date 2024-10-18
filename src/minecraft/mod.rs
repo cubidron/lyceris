@@ -19,11 +19,11 @@ use std::{
     env,
     fmt::{self, Debug},
     fs::{self, create_dir_all, File},
-    io::Write,
+    io::{BufReader, Write, BufRead},
     path::{PathBuf, MAIN_SEPARATOR_STR},
-    process::Stdio,
+    process::{Command, Stdio},
 };
-use tokio::process::{Child, Command};
+use tokio::process::{Child};
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
@@ -269,6 +269,20 @@ impl<R: Reporter> Instance<R> {
             .creation_flags(0x08000000)
             .spawn()
             .expect("Failed to launch game");
+
+            let stdout = child.stdout.take().unwrap();
+
+            let mut bufread = BufReader::new(stdout);
+            let mut buf = String::new();
+        
+            while let Ok(n) = bufread.read_line(&mut buf) {
+                if n > 0 {
+                    println!("Line: {}", buf.trim());
+                    buf.clear();
+                } else {
+                    break;
+                }
+            }
 
             self.reporter.send(Case::RemoveProgress);
             Ok(child)
