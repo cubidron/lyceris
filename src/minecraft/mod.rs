@@ -21,9 +21,8 @@ use std::{
     fs::{self, create_dir_all, File},
     io::{BufReader, Write, BufRead},
     path::{PathBuf, MAIN_SEPARATOR_STR},
-    process::{Command, Stdio},
+    process::{Command, Stdio, Child},
 };
-use tokio::process::{Child};
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
