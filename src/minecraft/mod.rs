@@ -255,7 +255,7 @@ impl<R: Reporter> Instance<R> {
         println!("{:?}", args);
         #[cfg(target_os = "windows")]
         {
-            let child = Command::new(
+            let mut child = Command::new(
                 self.config
                     .java_path
                     .join(self.config.java_version.to_string())
