@@ -436,7 +436,7 @@ impl<R: Reporter> Instance<R> {
         let classpaths = self.get_classpaths(store)?;
 
         self.reporter
-            .send(Case::SetSubMessage(t!("set_arguments").to_string()));
+            .send(Case::SetMessage(t!("set_arguments").to_string()));
 
         match &store.package.arguments {
             Some(arguments) => {
@@ -629,7 +629,7 @@ impl<R: Reporter> Instance<R> {
         let mut cp = String::new();
 
         self.reporter
-            .send(Case::SetSubMessage(t!("set_classpaths").to_string()));
+            .send(Case::SetMessage(t!("set_classpaths").to_string()));
 
         // Iterating through package libraries to find classpaths.
         for lib in &store.package.libraries {
