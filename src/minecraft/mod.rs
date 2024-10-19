@@ -21,9 +21,9 @@ use std::{
     fs::{self, create_dir_all, File},
     io::Write,
     path::{PathBuf, MAIN_SEPARATOR_STR},
-    process::Stdio, sync::Arc,
+    process::Stdio, sync::Arc, time::Duration,
 };
-use tokio::{io::{AsyncBufReadExt, BufReader}, process::{Child, Command}, sync::Notify};
+use tokio::{io::{AsyncBufReadExt, BufReader}, process::{Child, Command}, sync::Notify, time};
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
@@ -366,10 +366,25 @@ impl<R: Reporter> Instance<R> {
         }
     }
 
-    pub async fn wait_for_game(&mut self) {
-        if let Some(child) = &mut self.config.child {
-            let _ = child.wait().await;
-            self.config.notifier.notify_one();
+    pub fn poll(&mut self) -> Option<bool> {
+        if let Some(child) = self.config.child.as_mut() {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    self.config.child = None; // Process finished
+                    println!("Child process exited with: {:?}", status);
+                    Some(true) // Indicate that the process has exited
+                }
+                Ok(None) => {
+                    // Process is still running
+                    None
+                }
+                Err(e) => {
+                    eprintln!("Error trying to wait for process: {}", e);
+                    None
+                }
+            }
+        } else {
+            Some(true) // No process to check
         }
     }
 
