@@ -21,9 +21,9 @@ use std::{
     fs::{self, create_dir_all, File},
     io::Write,
     path::{PathBuf, MAIN_SEPARATOR_STR},
-    process::Stdio,
+    process::Stdio, sync::Arc,
 };
-use tokio::{io::{AsyncBufReadExt, BufReader}, process::{Child, Command}};
+use tokio::{io::{AsyncBufReadExt, BufReader}, process::{Child, Command}, sync::Notify};
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
@@ -83,6 +83,12 @@ pub struct Config {
     pub custom_java_args: Vec<String>,
     // Custom launch arguments.
     pub custom_launch_args: Vec<String>,
+    // Child process.
+    #[serde(skip_deserializing)]
+    child: Option<Child>,
+    // Notifier.
+    #[serde(skip_deserializing)]
+    pub notifier: Arc<Notify>
 }
 
 pub struct Store {
@@ -113,6 +119,8 @@ impl Default for Config {
             java_version: default_version.get_compatible_java_version(),
             custom_java_args: vec![],
             custom_launch_args: vec![],
+            child: None,
+            notifier: Arc::new(Notify::new())
         }
     }
 }
@@ -233,7 +241,7 @@ impl<R: Reporter> Instance<R> {
         Ok(())
     }
 
-    pub async fn launch<F>(&mut self, console_callback: F) -> Result<Child> 
+    pub async fn launch<F>(&mut self, console_callback: F) -> Result<()> 
     where 
         F: Fn(String) +  Send + 'static
     {
@@ -274,18 +282,22 @@ impl<R: Reporter> Instance<R> {
             .expect("Failed to launch game");
 
             let stdout = child.stdout.take().expect("Failed to capture stdout");
+            let stderr = child.stderr.take().expect("Failed to capture stderr");
 
-            let reader = BufReader::new(stdout);
-            let mut lines = reader.lines();
+            self.config.child = Some(child);
+
+            let notifier_clone = self.config.notifier.clone();
 
             tokio::spawn(async move {
-                while let Some(line) = lines.next_line().await.unwrap() {
+                let mut reader = BufReader::new(stdout).lines();
+                while let Some(line) = reader.next_line().await.unwrap() {
                     console_callback(line);
                 }
+                notifier_clone.notify_one();
             });
 
             self.reporter.send(Case::RemoveProgress);
-            Ok(child)
+            Ok(())
         }
 
         #[cfg(target_os = "linux")]
@@ -338,6 +350,26 @@ impl<R: Reporter> Instance<R> {
 
             self.reporter.send(Case::RemoveProgress);
             Ok(child)
+        }
+    }
+
+    async fn close(&mut self) {
+        if let Some(mut child) = self.config.child.take() {
+            if let Err(e) = child.kill().await {
+                eprintln!("Failed to kill game: {}", e);
+            } else {
+                println!("Game terminated.");
+            }
+        } else {
+            println!("No game is currently running.");
+        }
+    }
+
+    async fn wait_for_game(&mut self) {
+        if let Some(child) = &mut self.config.child {
+            let _ = child.wait().await;
+            println!("Game has exited.");
+            self.config.notifier.notify_one();
         }
     }
 
