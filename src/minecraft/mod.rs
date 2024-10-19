@@ -233,7 +233,10 @@ impl<R: Reporter> Instance<R> {
         Ok(())
     }
 
-    pub async fn launch(&mut self, console_callback: fn(String)) -> Result<Child> {
+    pub async fn launch<F>(&mut self, console_callback: F) -> Result<Child> 
+    where 
+        F: Fn(String) +  Send + 'static
+    {
         let mut store = STORE.lock().await;
 
         *store = Store {
