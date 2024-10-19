@@ -23,7 +23,7 @@ use std::{
     path::{PathBuf, MAIN_SEPARATOR_STR},
     process::Stdio,
 };
-use tokio::process::{Child, Command};
+use tokio::{io::{AsyncBufReadExt, BufReader}, process::{Child, Command}};
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
@@ -233,7 +233,7 @@ impl<R: Reporter> Instance<R> {
         Ok(())
     }
 
-    pub async fn launch(&mut self) -> Result<Child> {
+    pub async fn launch(&mut self, console_callback: fn(String)) -> Result<Child> {
         let mut store = STORE.lock().await;
 
         *store = Store {
@@ -256,7 +256,7 @@ impl<R: Reporter> Instance<R> {
         println!("{:?}", args);
         #[cfg(target_os = "windows")]
         {
-            let child = Command::new(
+            let mut child = Command::new(
                 self.config
                     .java_path
                     .join(self.config.java_version.to_string())
@@ -269,6 +269,17 @@ impl<R: Reporter> Instance<R> {
             .creation_flags(0x08000000)
             .spawn()
             .expect("Failed to launch game");
+
+            let stdout = child.stdout.take().expect("Failed to capture stdout");
+
+            let reader = BufReader::new(stdout);
+            let mut lines = reader.lines();
+
+            tokio::spawn(async move {
+                while let Some(line) = lines.next_line().await.unwrap() {
+                    console_callback(line);
+                }
+            });
 
             self.reporter.send(Case::RemoveProgress);
             Ok(child)
