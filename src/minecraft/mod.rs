@@ -353,7 +353,7 @@ impl<R: Reporter> Instance<R> {
         }
     }
 
-    async fn close(&mut self) {
+    pub async fn close(&mut self) {
         if let Some(mut child) = self.config.child.take() {
             if let Err(e) = child.kill().await {
                 eprintln!("Failed to kill game: {}", e);
@@ -365,7 +365,7 @@ impl<R: Reporter> Instance<R> {
         }
     }
 
-    async fn wait_for_game(&mut self) {
+    pub async fn wait_for_game(&mut self) {
         if let Some(child) = &mut self.config.child {
             let _ = child.wait().await;
             println!("Game has exited.");
