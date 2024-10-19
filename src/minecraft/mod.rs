@@ -282,7 +282,6 @@ impl<R: Reporter> Instance<R> {
             .expect("Failed to launch game");
 
             let stdout = child.stdout.take().expect("Failed to capture stdout");
-            let stderr = child.stderr.take().expect("Failed to capture stderr");
 
             self.config.child = Some(child);
 
