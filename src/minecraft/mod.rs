@@ -131,8 +131,8 @@ pub struct Instance<R: Reporter> {
 }
 
 impl<R: Reporter> Instance<R> {
-    pub fn new(config: Config, reporter: Option<R>) -> Self {
-        Self { config, reporter }
+    pub fn new() -> Self {
+        Self { config: Config::default(), reporter: None }
     }
     pub async fn prepare<'a>(&mut self, store: &'a mut MutexGuard<'_, Store>) -> Result<()> {
         self.reporter
@@ -241,10 +241,12 @@ impl<R: Reporter> Instance<R> {
         Ok(())
     }
 
-    pub async fn launch<F>(&mut self, console_callback: F) -> Result<()> 
+    pub async fn launch<F>(&mut self, reporter: R, config: Config, console_callback: F) -> Result<()> 
     where 
         F: Fn(String) +  Send + 'static
     {
+        self.config = config;
+        self.reporter = Some(reporter);
         let mut store = STORE.lock().await;
 
         *store = Store {
@@ -367,7 +369,6 @@ impl<R: Reporter> Instance<R> {
     pub async fn wait_for_game(&mut self) {
         if let Some(child) = &mut self.config.child {
             let _ = child.wait().await;
-            println!("Game has exited.");
             self.config.notifier.notify_one();
         }
     }
