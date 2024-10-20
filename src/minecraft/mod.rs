@@ -313,7 +313,7 @@ impl<R: Reporter> Instance<R> {
             let mut perms = fs::metadata(&path)?.permissions();
             perms.set_mode(0o755);
             fs::set_permissions(&path, perms)?;
-            let child = Command::new(path)
+            let mut child = Command::new(path)
                 .current_dir(if let Some(instance_path) = &self.config.instance_path {
                     instance_path.join(&self.config.instance_name)
                 } else {
