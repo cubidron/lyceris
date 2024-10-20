@@ -324,8 +324,22 @@ impl<R: Reporter> Instance<R> {
                 .spawn()
                 .expect("Failed to launch game");
 
+            let stdout = child.stdout.take().expect("Failed to capture stdout");
+
+            self.config.child = Some(child);
+
+            let notifier_clone = self.config.notifier.clone();
+
+            tokio::spawn(async move {
+                let mut reader = BufReader::new(stdout).lines();
+                while let Some(line) = reader.next_line().await.unwrap() {
+                    console_callback(line);
+                }
+                notifier_clone.notify_one();
+            });
+
             self.reporter.send(Case::RemoveProgress);
-            Ok(child)
+            Ok(())
         }
         #[cfg(target_os = "macos")]
         {
