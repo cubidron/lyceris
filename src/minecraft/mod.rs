@@ -6,7 +6,7 @@ use crate::{
     reporter::{Case, Reporter},
     utils::json_from_file,
 };
-use auth::AuthMethod;
+use auth::{online, AuthMethod};
 use ::serde::{de::DeserializeOwned, Deserialize, Serialize};
 use directories::BaseDirs;
 use futures_util::lock::{Mutex, MutexGuard};
@@ -85,7 +85,7 @@ pub struct Config {
     pub custom_launch_args: Vec<String>,
     // Child process.
     #[serde(skip_deserializing)]
-    child: Option<Child>,
+    pub child: Option<Child>,
     // Notifier.
     #[serde(skip_deserializing)]
     pub notifier: Arc<Notify>
@@ -454,15 +454,16 @@ impl<R: Reporter> Instance<R> {
 
         match &store.package.arguments {
             Some(arguments) => {
-                let username = match &self.config.authentication {
-                    AuthMethod::Offline(offline_user) => offline_user,
-                    _ => unimplemented!(), //AuthMethod::Online(microsoft_user) => microsoft_user.username,
-                };
                 for argument in &arguments.game {
                     if let GameElement::String(string) = argument {
                         game.push(match string.as_str() {
                             // todo authentication
-                            "${auth_player_name}" => username.clone(),
+                            "${auth_player_name}" => match &self.config.authentication {
+                                AuthMethod::Offline(offline_user) => offline_user.clone(),
+                                AuthMethod::Online(online) => {
+                                    online.username.clone()
+                                }
+                            },
                             "${version_name}" => self.config.version_name.clone(),
                             "${game_directory}" => {
                                 if let Some(instance_path) = &self.config.instance_path {
@@ -478,11 +479,36 @@ impl<R: Reporter> Instance<R> {
                                 self.config.root_path.join("assets").display().to_string()
                             }
                             "${assets_index_name}" => store.package.asset_index.id.clone(),
-                            "${auth_uuid}" => "bc58f189-ef1a-4bca-9e4f-e047ee4432be".to_string(),
-                            "${auth_access_token}" => "123".to_string(),
-                            "${clientid}" => "123".to_string(),
-                            "${auth_xuid}" => "123".to_string(),
-                            "${user_type}" => "mojang".to_string(),
+                            "${auth_uuid}" => match &self.config.authentication {
+                                AuthMethod::Offline(offline_user) => "123".to_string(),
+                                AuthMethod::Online(online) => {
+                                    online.uuid.clone()
+                                }
+                            },
+                            "${auth_access_token}" => match &self.config.authentication {
+                                AuthMethod::Offline(offline_user) => "123".to_string(),
+                                AuthMethod::Online(online) => {
+                                    online.access_token.clone()
+                                }
+                            },
+                            "${clientid}" => match &self.config.authentication {
+                                AuthMethod::Offline(offline_user) => "123".to_string(),
+                                AuthMethod::Online(online) => {
+                                    online.client_id.clone()
+                                }
+                            },
+                            "${auth_xuid}" => match &self.config.authentication {
+                                AuthMethod::Offline(offline_user) => "123".to_string(),
+                                AuthMethod::Online(online) => {
+                                    online.xuid.clone()
+                                }
+                            },
+                            "${user_type}" => match &self.config.authentication {
+                                AuthMethod::Offline(offline_user) => "mojang".to_string(),
+                                AuthMethod::Online(online) => {
+                                    "msa".to_string()
+                                }
+                            },
                             "${version_type}" => "release".to_string(),
                             _ => string.to_string(),
                         });

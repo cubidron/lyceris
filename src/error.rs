@@ -1,6 +1,8 @@
 use core::fmt;
-use std::io;
+use std::{io, string::FromUtf8Error};
 
+use base64::DecodeError;
+use oauth2::url::ParseError;
 use zip::result::ZipError;
 
 #[derive(thiserror::Error,Debug)]
@@ -17,6 +19,12 @@ pub enum Error{
     FabricError(FabricError),
     #[error("Quilt error occured : {0}")]
     QuiltError(QuiltError),
+    #[error("Url parse error: {0}")]
+    UrlParseError(#[from] ParseError),
+    #[error("UTF-8 conversion error: {0}")]
+    Utf8ConversionError(#[from] FromUtf8Error),
+    #[error("Base64 decode error: {0}")]
+    Base64(#[from] DecodeError),
     #[error("Unknown error: {0}")]
     UnknownError(String)
 }

@@ -1,8 +1,11 @@
+use crate::error;
 use crate::minecraft::downloader;
 use crate::prelude::Result;
+use base64::prelude::*;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use sha1::Digest;
 use sha1::Sha1;
 use std::collections::HashSet;
@@ -138,4 +141,19 @@ pub fn recurse_files(path: impl AsRef<Path>) -> std::io::Result<HashSet<PathBuf>
     }
 
     Ok(buf)
+}
+
+pub fn decode_base64_url(encoded: &str) -> Result<Vec<u8>> {
+    // URL güvenli base64'teki '-' ve '_' karakterlerini düzelt
+    let mut base64 = encoded.replace('-', "+").replace('_', "/");
+    
+    // Doldurma karakterlerini ekle
+    let padding = 4 - (base64.len() % 4);
+    if padding < 4 {
+        base64.push_str(&"=".repeat(padding));
+    }
+    
+    // Base64 çözümleme.
+    let decoded = BASE64_URL_SAFE.decode(&base64)?;
+    Ok(decoded)
 }

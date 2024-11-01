@@ -23,21 +23,34 @@ pub fn set_locale(locale: &str) {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+    use std::net::{SocketAddr};
     use std::path::PathBuf;
+    use std::sync::mpsc;
 
+    use crate::minecraft::auth::online::{self, Online};
     use crate::minecraft::custom::fabric::Fabric;
     use crate::minecraft::custom::optifine::OptiFine;
     use crate::minecraft::custom::quilt::Quilt;
     use crate::minecraft::version::Custom;
-    use crate::minecraft::Config;
+    use crate::minecraft::{auth, Config};
     use crate::network::post;
     use crate::{
         minecraft::{version::MinecraftVersion, Instance},
         reporter::Reporter,
     };
-    use reqwest::Body;
+    use axum::extract::Query;
+    use axum::Router;
+    use axum::routing::get;
+    use oauth2::basic::BasicClient;
+    use oauth2::reqwest::async_http_client;
+    use oauth2::{AuthType, AuthUrl, AuthorizationCode, ClientId, CsrfToken, DeviceAuthorizationUrl, PkceCodeChallenge, RedirectUrl, Scope, StandardDeviceAuthorizationResponse, TokenResponse, TokenUrl};
+    use reqwest::{Body, Client, Url};
+    use serde::{Deserialize, Serialize};
     use serde_json::{json, Value};
     use tokio::io::AsyncBufReadExt;
+    use tokio::net::TcpListener;
+    use tokio::runtime::Runtime;
     use tokio::{
         io::{AsyncWriteExt, BufReader},
         test,
@@ -54,27 +67,20 @@ mod tests {
 
     #[test]
     async fn test_launch() {
-        let mut launcher: Instance<TestReporter> = Instance::new(
-            Config {
-                version: MinecraftVersion::Custom(Custom::OptiFine(OptiFine::new(
-                    (1, 21, Some(1)),
-                    PathBuf::from("C:\\Users\\batuh\\AppData\\Roaming\\.minecraft\\libraries\\optifine\\OptiFine\\1.21.1_HD_U_J1\\OptiFine-1.21.1_HD_U_J1.jar"),
-                    PathBuf::from("C:\\Users\\batuh\\AppData\\Roaming\\.minecraft\\versions\\1.21.1-OptiFine_HD_U_J1\\1.21.1-OptiFine_HD_U_J1.json"),
-                    None
-                ))),
-                java_version: crate::minecraft::java::JavaVersion::Delta,
-                root_path: PathBuf::from("C:\\Users\\batuh\\AppData\\Roaming\\.basonw"),
-                //custom_java_args: vec!["-XstartOnFirstThread".to_string()],
-                ..Config::default()
-            },
-            Some(TestReporter {}),
-        );
-        let mut p = launcher.launch().await.unwrap();
-        let stdout = p.stdout.take().expect("no stdout");
+        let test = Online::authenticate("M.C531_BL2.2.U.162dc3b8-3e5c-dd43-9a42-c33a3d65af49".to_string()).await.unwrap();
 
-        let mut lines = BufReader::new(stdout).lines();
-        while let Some(line) = lines.next_line().await.unwrap() {
-            println!("{}", line);
-        }
+        println!("{:?}", test);
+    }
+    #[test]
+    async fn retrieve_code() {
+        println!("{:?}", Online::create_link());
+    }
+    #[test]
+    async fn launch_game() {
+        let mut instance = Instance::new();
+
+        instance.launch(TestReporter{}, Config{
+            authentication: auth::AuthMethod::Online(online::Online::authenticate("M.C531_SN1.2.U.3e231200-c604-773e-3a83-bd0da9400088".to_string()).await.unwrap()), ..Config::default()
+        }, |e| println!("{:?}", e)).await.unwrap();
     }
 }
