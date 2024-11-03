@@ -1,6 +1,6 @@
 use crate::{
     error::Error,
-    minecraft::{version::ToString},
+    minecraft::version::ToString,
     network::{download_retry, get, get_json},
     prelude::{Result, CLASSPATH_SEPERATOR},
     reporter::{Case, Reporter},
@@ -15,17 +15,11 @@ use log::{error, warn};
 use once_cell::sync::Lazy;
 use rust_i18n::t;
 use std::{
-    collections::HashSet,
-    env,
-    fmt::{self, Debug},
-    fs::{self, create_dir_all, File},
-    io::Write,
-    path::{PathBuf, MAIN_SEPARATOR_STR},
-    process::Stdio, sync::Arc, time::Duration,
+    collections::HashSet, env, fmt::{self, Debug}, fs::{self, create_dir_all, File}, io::Write, path::{PathBuf, MAIN_SEPARATOR_STR}, process::Stdio, sync::Arc, time::Duration
 };
 use tokio::{io::{AsyncBufReadExt, BufReader}, process::{Child, Command}, sync::Notify, time};
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::os::unix::fs::PermissionsExt;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -352,7 +346,11 @@ impl<R: Reporter> Instance<R> {
                 .join("Home")
                 .join("bin")
                 .join("java");
-            let child = Command::new(path)
+            
+            let mut perms = fs::metadata(&path)?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&path, perms)?;
+            let mut child = Command::new(path)
                 .current_dir(if let Some(instance_path) = &self.config.instance_path {
                     instance_path.join(&self.config.instance_name)
                 } else {
@@ -363,8 +361,22 @@ impl<R: Reporter> Instance<R> {
                 .spawn()
                 .expect("Failed to launch game");
 
+            let stdout = child.stdout.take().expect("Failed to capture stdout");
+
+            self.config.child = Some(child);
+
+            let notifier_clone = self.config.notifier.clone();
+
+            tokio::spawn(async move {
+                let mut reader = BufReader::new(stdout).lines();
+                while let Some(line) = reader.next_line().await.unwrap() {
+                    console_callback(line);
+                }
+                notifier_clone.notify_one();
+            });
+
             self.reporter.send(Case::RemoveProgress);
-            Ok(child)
+            Ok(())
         }
     }
 
