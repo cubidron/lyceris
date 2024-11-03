@@ -105,7 +105,7 @@ struct Profiles {
     mc: String,
 }
 
-#[derive(Deserialize, Default, Debug)]
+#[derive(Deserialize, Serialize, Default, Debug)]
 pub struct Online {
     pub xuid: String,
     pub exp: u64,
