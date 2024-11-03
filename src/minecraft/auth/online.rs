@@ -3,6 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use oauth2::{AuthUrl, ClientId, CsrfToken, RedirectUrl, Scope, TokenUrl};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use error::Error;
 
 use crate::{error, network, prelude::Result, utils::decode_base64_url};
 
@@ -76,10 +77,14 @@ struct Cape {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserProfile {
-    pub id: String,
-    pub name: String,
-    skins: Vec<Skin>,
-    capes: Vec<Cape>,
+    pub id: Option<String>,
+    pub name: Option<String>,
+    skins: Option<Vec<Skin>>,
+    capes: Option<Vec<Cape>>,
+    path: Option<String>,
+    error: Option<String>,
+    #[serde(rename = "errorMessage")]
+    error_message: Option<String>
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,8 +163,8 @@ impl Online {
         Ok(Self {
             xuid: jwt.xuid,
             exp: jwt.exp,
-            uuid: profile.id,
-            username: profile.name,
+            uuid: profile.id.unwrap_or_default(),
+            username: profile.name.unwrap_or_default(),
             access_token: token.access_token,
             refresh_token: ms_token.refresh_token,
             client_id: CLIENT_ID.to_string(),
@@ -204,8 +209,8 @@ impl Online {
         Ok(Self {
             xuid: jwt.xuid,
             exp: jwt.exp,
-            uuid: profile.id,
-            username: profile.name,
+            uuid: profile.id.unwrap_or_default(),
+            username: profile.name.unwrap_or_default(),
             access_token: token.access_token,
             refresh_token: ms_token.refresh_token,
             client_id: CLIENT_ID.to_string(),
@@ -300,6 +305,15 @@ impl Online {
             .send()
             .await?;
 
-        Ok(response.json().await?)
+        let profile = response.json::<UserProfile>().await?;
+
+        if let Some(error) = profile.error {
+            match error.as_str() {
+                "NOT_FOUND" => return Err(Error::AuthenticationError("Could not find minecraft profile".to_string())),
+                _ => return Err(Error::AuthenticationError(error))
+            };
+        } else {
+            return Ok(profile)
+        }
     }
 }

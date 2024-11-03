@@ -25,6 +25,8 @@ pub enum Error{
     Utf8ConversionError(#[from] FromUtf8Error),
     #[error("Base64 decode error: {0}")]
     Base64(#[from] DecodeError),
+    #[error("Authentication error: {0}")]
+    AuthenticationError(String),
     #[error("Unknown error: {0}")]
     UnknownError(String)
 }
