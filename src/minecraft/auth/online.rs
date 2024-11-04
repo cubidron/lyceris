@@ -12,13 +12,13 @@ pub static REDIRECT_URI: &str = "https://login.live.com/oauth20_desktop.srf";
 pub static AUTH_URL: &str = "https://login.live.com/oauth20_authorize.srf";
 pub static TOKEN_URL: &str = "https://login.live.com/oauth20_token.srf";
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct MSToken {
     access_token: String,
     refresh_token: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct XboxToken {
     #[serde(rename = "IssueInstant")]
     issue_instant: String,
@@ -27,7 +27,7 @@ struct XboxToken {
     #[serde(rename = "Token")]
     token: String,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MinecraftResponse {
     /// UUID of the Xbox account.
     /// Please note that this is not the Minecraft player's UUID
@@ -38,7 +38,7 @@ pub struct MinecraftResponse {
     pub expires_in: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct XstsToken {
     #[serde(rename = "Token")]
     token: String,
@@ -46,17 +46,17 @@ struct XstsToken {
     display_claims: DisplayClaims,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct DisplayClaims {
     xui: Vec<Xui>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Xui {
     uhs: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Skin {
     id: String,
     state: String,
@@ -66,7 +66,7 @@ struct Skin {
     alias: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Cape {
     id: String,
     state: String,
@@ -75,7 +75,7 @@ struct Cape {
     alias: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UserProfile {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -87,7 +87,7 @@ pub struct UserProfile {
     error_message: Option<String>
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct MCJWTDecoded {
     xuid: String,
     agg: String,
@@ -105,12 +105,12 @@ pub struct MCJWTDecoded {
     iat: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct Profiles {
     mc: String,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone)]
 pub struct Online {
     pub xuid: String,
     pub exp: u64,

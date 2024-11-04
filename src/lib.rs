@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     async fn test_launch() {
-        let test = Online::authenticate("M.C531_BL2.2.U.162dc3b8-3e5c-dd43-9a42-c33a3d65af49".to_string()).await.unwrap();
+        let test = Online::authenticate("M.C514_BAY.2.U.413e6719-12c4-33ca-32a7-f7eaf6065052".to_string()).await.unwrap();
 
         println!("{:?}", test);
     }
