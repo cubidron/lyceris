@@ -309,7 +309,7 @@ impl Online {
 
         if let Some(error) = profile.error {
             match error.as_str() {
-                "NOT_FOUND" => return Err(Error::AuthenticationError("Could not find minecraft profile".to_string())),
+                "NOT_FOUND" => return Err(Error::AuthenticationError("Account does not own Minecraft.".to_string())),
                 _ => return Err(Error::AuthenticationError(error))
             };
         } else {
