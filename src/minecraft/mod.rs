@@ -11,7 +11,7 @@ use ::serde::{de::DeserializeOwned, Deserialize, Serialize};
 use directories::BaseDirs;
 use futures_util::lock::{Mutex, MutexGuard};
 use lazy_static::lazy_static;
-use log::{error, warn};
+use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use rust_i18n::t;
 use std::{
@@ -255,14 +255,15 @@ impl<R: Reporter> Instance<R> {
         self.install(&store).await?;
 
         let args = self.prepare_arguments(&mut store)?;
-        // `creation_flags` method avoids console window.
-
+        
         self.reporter
-            .send(Case::SetMessage(t!("launching").to_string()));
+        .send(Case::SetMessage(t!("launching").to_string()));
 
-        println!("{:?}", args);
+        info!("Launching game with arguments: {:?}", args);
+    
         #[cfg(target_os = "windows")]
         {
+            // `creation_flags` method avoids console window.
             let mut child = Command::new(
                 self.config
                     .java_path
@@ -303,7 +304,7 @@ impl<R: Reporter> Instance<R> {
                 .join(self.config.java_version.to_string())
                 .join("bin")
                 .join("java");
-            println!("{:?}", path);
+            info!("{:?}", path);
             let mut perms = fs::metadata(&path)?.permissions();
             perms.set_mode(0o755);
             fs::set_permissions(&path, perms)?;
@@ -383,12 +384,12 @@ impl<R: Reporter> Instance<R> {
     pub async fn close(&mut self) {
         if let Some(mut child) = self.config.child.take() {
             if let Err(e) = child.kill().await {
-                eprintln!("Failed to kill game: {}", e);
+                info!("Failed to kill game: {}", e);
             } else {
-                println!("Game terminated.");
+                info!("Game terminated.");
             }
         } else {
-            println!("No game is currently running.");
+            info!("No game is currently running.");
         }
     }
 
@@ -397,7 +398,7 @@ impl<R: Reporter> Instance<R> {
             match child.try_wait() {
                 Ok(Some(status)) => {
                     self.config.child = None; // Process finished
-                    println!("Child process exited with: {:?}", status);
+                    info!("Child process exited with: {:?}", status);
                     Some(true) // Indicate that the process has exited
                 }
                 Ok(None) => {
@@ -405,7 +406,7 @@ impl<R: Reporter> Instance<R> {
                     None
                 }
                 Err(e) => {
-                    eprintln!("Error trying to wait for process: {}", e);
+                    info!("Error trying to wait for process: {}", e);
                     None
                 }
             }
@@ -441,6 +442,10 @@ impl<R: Reporter> Instance<R> {
     fn prepare_arguments(&mut self, store: &mut MutexGuard<'_, Store>) -> Result<Vec<String>> {
         let (mut game, mut jvm) = (Vec::<String>::new(), Vec::<String>::new());
         jvm.append(&mut self.config.custom_java_args);
+
+        #[cfg(target_os = "macos")]
+        jvm.push("-XstartOnFirstThread".to_string());
+
         let mut total_memory = sysinfo::System::new_all().available_memory();
         match self.config.memory {
             Memory::Gigabyte(min, max) => {
@@ -492,7 +497,7 @@ impl<R: Reporter> Instance<R> {
                             }
                             "${assets_index_name}" => store.package.asset_index.id.clone(),
                             "${auth_uuid}" => match &self.config.authentication {
-                                AuthMethod::Offline(offline_user) => "123".to_string(),
+                                AuthMethod::Offline(offline_user) => "97b006ed-8a94-4d36-8b92-cdcdfe5cee92".to_string(),
                                 AuthMethod::Online(online) => {
                                     online.uuid.clone()
                                 }
@@ -504,13 +509,13 @@ impl<R: Reporter> Instance<R> {
                                 }
                             },
                             "${clientid}" => match &self.config.authentication {
-                                AuthMethod::Offline(offline_user) => "123".to_string(),
+                                AuthMethod::Offline(offline_user) => "97b006ed-8a94-4d36-8b92-cdcdfe5cee92".to_string(),
                                 AuthMethod::Online(online) => {
                                     online.client_id.clone()
                                 }
                             },
                             "${auth_xuid}" => match &self.config.authentication {
-                                AuthMethod::Offline(offline_user) => "123".to_string(),
+                                AuthMethod::Offline(offline_user) => "97b006ed-8a94-4d36-8b92-cdcdfe5cee92".to_string(),
                                 AuthMethod::Online(online) => {
                                     online.xuid.clone()
                                 }

@@ -119,7 +119,14 @@ pub async fn get_manifest_by_version(version: &JavaVersion) -> Result<JavaManife
         _ => panic!("Unsupported architecture"),
     };
 
-    let url = &java_runtime[format!("{}-{}", os, arch).as_str()][match version {
+    let url = &java_runtime[if cfg!(all(target_os = "macos", target_arch = "aarch64"))
+        && version == &JavaVersion::Gamma
+    {
+        format!("{}", os)
+    } else {
+        format!("{}-{}", os, arch)
+    }
+    .as_str()][match version {
         JavaVersion::Delta => "java-runtime-delta",
         JavaVersion::Gamma => "java-runtime-gamma",
         JavaVersion::Alpha => "java-runtime-alpha",

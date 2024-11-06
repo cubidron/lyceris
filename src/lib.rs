@@ -72,12 +72,26 @@ mod tests {
     async fn retrieve_code() {
         println!("{:?}", Online::create_link());
     }
-    #[test]
+
+    #[tokio::test]
     async fn launch_game() {
         let mut instance = Instance::new();
 
-        instance.launch(TestReporter{}, Config{
-            authentication: auth::AuthMethod::Online(online::Online::authenticate("M.C531_SN1.2.U.3e231200-c604-773e-3a83-bd0da9400088".to_string()).await.unwrap()), ..Config::default()
+        instance.launch(TestReporter{}, Config {
+            version: MinecraftVersion::Release((1,16, None)),
+            ..Config::default()
         }, |e| println!("{:?}", e)).await.unwrap();
+        loop {
+            println!("Polling check");
+            if let Some(status) = instance.poll() {
+                if status == false {
+                    println!("Not closed yet!");
+                } else{
+                    println!("Closed!");
+                }
+            }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        }
     }
 }
