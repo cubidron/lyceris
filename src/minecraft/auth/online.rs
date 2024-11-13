@@ -1,9 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use error::Error;
 use oauth2::{AuthUrl, ClientId, CsrfToken, RedirectUrl, Scope, TokenUrl};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use error::Error;
 
 use crate::{error, network, prelude::Result, utils::decode_base64_url};
 
@@ -84,7 +84,7 @@ pub struct UserProfile {
     path: Option<String>,
     error: Option<String>,
     #[serde(rename = "errorMessage")]
-    error_message: Option<String>
+    error_message: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -171,11 +171,13 @@ impl Online {
         })
     }
 
-    pub async fn validate(&self) -> bool {
-        return self.exp < SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| "System time error").unwrap()
-        .as_secs() as u64
+    pub fn validate(&self) -> bool {
+        return self.exp
+            < SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_| "System time error")
+                .unwrap()
+                .as_secs() as u64;
     }
 
     pub async fn refresh(&self) -> Result<Online> {
@@ -186,7 +188,7 @@ impl Online {
                 ("scope", "service::user.auth.xboxlive.com::MBI_SSL"),
                 ("grant_type", "refresh_token"),
                 ("redirect_uri", REDIRECT_URI),
-                ("refresh_token", &self.refresh_token)
+                ("refresh_token", &self.refresh_token),
             ])
             .send()
             .await?;
@@ -309,11 +311,15 @@ impl Online {
 
         if let Some(error) = profile.error {
             match error.as_str() {
-                "NOT_FOUND" => return Err(Error::AuthenticationError("Account does not own Minecraft.".to_string())),
-                _ => return Err(Error::AuthenticationError(error))
+                "NOT_FOUND" => {
+                    return Err(Error::AuthenticationError(
+                        "Account does not own Minecraft.".to_string(),
+                    ))
+                }
+                _ => return Err(Error::AuthenticationError(error)),
             };
         } else {
-            return Ok(profile)
+            return Ok(profile);
         }
     }
 }
