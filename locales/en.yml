@@ -2,7 +2,7 @@ config_not_found: Can't find config directory of the operating system. Using %{p
 prepare: Preparing the instance
 check_resources: Checking resources
 download_missing_resources: Downloading missing resources
-check_client: Checking client 
+check_client: Checking client
 install_client: Installing client
 check_libraries: Checking libraries
 download_missing_libraries: Downloading missing libraries
@@ -18,5 +18,4 @@ check_fabric: Checking fabric
 download_missing_fabric: Downloading fabric
 check_quilt: Checking quilt
 download_missing_quilt: Downloading quilt
-manifest_file_save: Saving manifest file at %{path}
 max_memory_set: Max memory set to %{max} because of the available memory

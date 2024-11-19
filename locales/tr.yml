@@ -17,5 +17,4 @@ check_fabric: Fabric kontrol ediliyor
 download_missing_fabric: Eksik Fabric dosyaları indiriliyor
 check_quilt: Quilt kontrol ediliyor
 download_missing_quilt: Eksik Quilt dosyaları indiriliyor
-manifest_file_save: Manifest dosyası %{path} yoluna kaydediliyor
-max_memory_set: Maksimum bellek %{max}GB olarak ayarlandı 
+max_memory_set: Maksimum bellek %{max}GB olarak ayarlandı

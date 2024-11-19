@@ -6,8 +6,8 @@ use crate::{
     reporter::{Case, Reporter},
     utils::json_from_file,
 };
-use auth::{online, AuthMethod};
 use ::serde::{de::DeserializeOwned, Deserialize, Serialize};
+use auth::{online, AuthMethod};
 use directories::BaseDirs;
 use futures_util::lock::{Mutex, MutexGuard};
 use lazy_static::lazy_static;
@@ -15,9 +15,22 @@ use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use rust_i18n::t;
 use std::{
-    collections::HashSet, env, fmt::{self, Debug}, fs::{self, create_dir_all, File}, io::Write, path::{PathBuf, MAIN_SEPARATOR_STR}, process::Stdio, sync::Arc, time::Duration
+    collections::HashSet,
+    env,
+    fmt::{self, Debug},
+    fs::{self, create_dir_all, File},
+    io::Write,
+    path::{PathBuf, MAIN_SEPARATOR_STR},
+    process::Stdio,
+    sync::Arc,
+    time::Duration,
 };
-use tokio::{io::{AsyncBufReadExt, BufReader}, process::{Child, Command}, sync::Notify, time};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    process::{Child, Command},
+    sync::Notify,
+    time,
+};
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::os::unix::fs::PermissionsExt;
@@ -82,7 +95,7 @@ pub struct Config {
     pub child: Option<Child>,
     // Notifier.
     #[serde(skip_deserializing)]
-    pub notifier: Arc<Notify>
+    pub notifier: Arc<Notify>,
 }
 
 pub struct Store {
@@ -114,7 +127,7 @@ impl Default for Config {
             custom_java_args: vec![],
             custom_launch_args: vec![],
             child: None,
-            notifier: Arc::new(Notify::new())
+            notifier: Arc::new(Notify::new()),
         }
     }
 }
@@ -126,7 +139,10 @@ pub struct Instance<R: Reporter> {
 
 impl<R: Reporter> Instance<R> {
     pub fn new() -> Self {
-        Self { config: Config::default(), reporter: None }
+        Self {
+            config: Config::default(),
+            reporter: None,
+        }
     }
     pub async fn prepare<'a>(&mut self, store: &'a mut MutexGuard<'_, Store>) -> Result<()> {
         self.reporter
@@ -144,9 +160,7 @@ impl<R: Reporter> Instance<R> {
 
             let manifest = get_json::<VersionManifest>(VERSION_MANIFEST_URL).await?;
             let mut file = File::create(&version_manifest_path)?;
-            self.reporter.send(Case::SetSubMessage(
-                t!("manifest_file_save", path = version_manifest_path.display()).to_string(),
-            ));
+
             file.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes())?;
             if let MinecraftVersion::Custom(ext) = &mut self.config.version {
                 match ext {
@@ -235,9 +249,14 @@ impl<R: Reporter> Instance<R> {
         Ok(())
     }
 
-    pub async fn launch<F>(&mut self, reporter: R, config: Config, console_callback: F) -> Result<()> 
-    where 
-        F: Fn(String) +  Send + 'static
+    pub async fn launch<F>(
+        &mut self,
+        reporter: R,
+        config: Config,
+        console_callback: F,
+    ) -> Result<()>
+    where
+        F: Fn(String) + Send + 'static,
     {
         self.config = config;
         self.reporter = Some(reporter);
@@ -255,12 +274,12 @@ impl<R: Reporter> Instance<R> {
         self.install(&store).await?;
 
         let args = self.prepare_arguments(&mut store)?;
-        
+
         self.reporter
-        .send(Case::SetMessage(t!("launching").to_string()));
+            .send(Case::SetMessage(t!("launching").to_string()));
 
         info!("Launching game with arguments: {:?}", args);
-    
+
         #[cfg(target_os = "windows")]
         {
             // `creation_flags` method avoids console window.
@@ -347,7 +366,7 @@ impl<R: Reporter> Instance<R> {
                 .join("Home")
                 .join("bin")
                 .join("java");
-            
+
             let mut perms = fs::metadata(&path)?.permissions();
             perms.set_mode(0o755);
             fs::set_permissions(&path, perms)?;
@@ -477,9 +496,7 @@ impl<R: Reporter> Instance<R> {
                             // todo authentication
                             "${auth_player_name}" => match &self.config.authentication {
                                 AuthMethod::Offline(offline_user) => offline_user.clone(),
-                                AuthMethod::Online(online) => {
-                                    online.username.clone()
-                                }
+                                AuthMethod::Online(online) => online.username.clone(),
                             },
                             "${version_name}" => self.config.version_name.clone(),
                             "${game_directory}" => {
@@ -497,34 +514,30 @@ impl<R: Reporter> Instance<R> {
                             }
                             "${assets_index_name}" => store.package.asset_index.id.clone(),
                             "${auth_uuid}" => match &self.config.authentication {
-                                AuthMethod::Offline(offline_user) => "97b006ed-8a94-4d36-8b92-cdcdfe5cee92".to_string(),
-                                AuthMethod::Online(online) => {
-                                    online.uuid.clone()
+                                AuthMethod::Offline(offline_user) => {
+                                    "97b006ed-8a94-4d36-8b92-cdcdfe5cee92".to_string()
                                 }
+                                AuthMethod::Online(online) => online.uuid.clone(),
                             },
                             "${auth_access_token}" => match &self.config.authentication {
                                 AuthMethod::Offline(offline_user) => "123".to_string(),
-                                AuthMethod::Online(online) => {
-                                    online.access_token.clone()
-                                }
+                                AuthMethod::Online(online) => online.access_token.clone(),
                             },
                             "${clientid}" => match &self.config.authentication {
-                                AuthMethod::Offline(offline_user) => "97b006ed-8a94-4d36-8b92-cdcdfe5cee92".to_string(),
-                                AuthMethod::Online(online) => {
-                                    online.client_id.clone()
+                                AuthMethod::Offline(offline_user) => {
+                                    "97b006ed-8a94-4d36-8b92-cdcdfe5cee92".to_string()
                                 }
+                                AuthMethod::Online(online) => online.client_id.clone(),
                             },
                             "${auth_xuid}" => match &self.config.authentication {
-                                AuthMethod::Offline(offline_user) => "97b006ed-8a94-4d36-8b92-cdcdfe5cee92".to_string(),
-                                AuthMethod::Online(online) => {
-                                    online.xuid.clone()
+                                AuthMethod::Offline(offline_user) => {
+                                    "97b006ed-8a94-4d36-8b92-cdcdfe5cee92".to_string()
                                 }
+                                AuthMethod::Online(online) => online.xuid.clone(),
                             },
                             "${user_type}" => match &self.config.authentication {
                                 AuthMethod::Offline(offline_user) => "mojang".to_string(),
-                                AuthMethod::Online(online) => {
-                                    "msa".to_string()
-                                }
+                                AuthMethod::Online(online) => "msa".to_string(),
                             },
                             "${version_type}" => "release".to_string(),
                             _ => string.to_string(),
@@ -553,13 +566,13 @@ impl<R: Reporter> Instance<R> {
                             string = string.replace("${classpath}", classpaths.as_str());
                             string.push_str(
                                 &self
-                                  .config
-                                  .root_path
-                                  .join("versions")
-                                  .join(&self.config.version_name)
-                                  .join(format!("{}.jar", self.config.version_name))
-                                  .display()
-                                  .to_string(),
+                                    .config
+                                    .root_path
+                                    .join("versions")
+                                    .join(&self.config.version_name)
+                                    .join(format!("{}.jar", self.config.version_name))
+                                    .display()
+                                    .to_string(),
                             );
                         }
                         jvm.push(string);
@@ -580,7 +593,7 @@ impl<R: Reporter> Instance<R> {
                         Custom::OptiFine(v) => {
                             if let Some(package) = &v.package {
                                 jvm.push(package.main_class.clone());
-                                for argument in &package.arguments.game{
+                                for argument in &package.arguments.game {
                                     game.push(argument.to_string());
                                 }
                             }
@@ -671,7 +684,7 @@ impl<R: Reporter> Instance<R> {
                 }
             },
         }
-        
+
         game.append(&mut self.config.custom_launch_args);
         jvm.append(&mut game);
 
