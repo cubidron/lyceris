@@ -465,20 +465,12 @@ impl<R: Reporter> Instance<R> {
         #[cfg(target_os = "macos")]
         jvm.push("-XstartOnFirstThread".to_string());
 
-        let mut total_memory = sysinfo::System::new_all().available_memory();
         match self.config.memory {
             Memory::Gigabyte(min, max) => {
                 jvm.push(format!("-Xms{}G", min));
                 jvm.push(format!("-Xmx{}G", max));
             }
             Memory::Megabyte(mut min, mut max) => {
-                total_memory = total_memory / 1024 / 1024;
-                if max > total_memory {
-                    max = total_memory;
-                }
-                if min > max {
-                    min = max;
-                }
                 jvm.push(format!("-Xms{}M", min));
                 jvm.push(format!("-Xmx{}M", max));
             }
