@@ -122,7 +122,7 @@ pub async fn get_manifest_by_version(version: &JavaVersion) -> Result<JavaManife
     let url = &java_runtime[if cfg!(all(target_os = "macos", target_arch = "aarch64"))
         && version == &JavaVersion::Gamma
     {
-        format!("{}", os)
+        os.to_string()
     } else {
         format!("{}-{}", os, arch)
     }

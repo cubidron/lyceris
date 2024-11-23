@@ -266,7 +266,7 @@ impl<R: Reporter> Downloader for Instance<R> {
                     }
                 },
                 Custom::OptiFine(v)=> {
-                    &v.generate_files(&self.config.root_path)?;
+                    v.generate_files(&self.config.root_path)?;
                 }
                 _ => unimplemented!(),
             }

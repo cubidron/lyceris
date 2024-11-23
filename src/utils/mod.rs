@@ -113,7 +113,7 @@ pub fn extract_file_from_jar(jar_path: &PathBuf, file_name: &str, output_path: &
         let mut zip_file = archive.by_index(i)?;
         if zip_file.name() == file_name {
             let output_file_path = Path::new(output_path);
-            let mut output_file = File::create(&output_file_path)?;
+            let mut output_file = File::create(output_file_path)?;
 
             std::io::copy(&mut zip_file, &mut output_file)?;
             return Ok(());

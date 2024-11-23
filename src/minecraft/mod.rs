@@ -137,6 +137,12 @@ pub struct Instance<R: Reporter> {
     reporter: Option<R>,
 }
 
+impl<R: Reporter> Default for Instance<R> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<R: Reporter> Instance<R> {
     pub fn new() -> Self {
         Self {
@@ -253,10 +259,10 @@ impl<R: Reporter> Instance<R> {
         &mut self,
         reporter: R,
         config: Config,
-        console_callback: F,
+        mut console_callback: F,
     ) -> Result<()>
     where
-        F: Fn(String) + Send + 'static,
+        F: FnMut(String) + Send + 'static,
     {
         self.config = config;
         self.reporter = Some(reporter);

@@ -150,8 +150,7 @@ impl Online {
         let xsts_token = Self::get_xsts_token(&xbox_token.token).await?;
         let userhash = xsts_token
             .display_claims
-            .xui
-            .get(0)
+            .xui.first()
             .ok_or("No XUI claims found")
             .unwrap()
             .uhs
@@ -172,12 +171,12 @@ impl Online {
     }
 
     pub fn validate(&self) -> bool {
-        return self.exp
+        self.exp
             > SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|_| "System time error")
                 .unwrap()
-                .as_secs() as u64;
+                .as_secs()
     }
 
     pub async fn refresh(&self) -> Result<Online> {
@@ -198,8 +197,7 @@ impl Online {
         let xsts_token = Self::get_xsts_token(&xbox_token.token).await?;
         let userhash = xsts_token
             .display_claims
-            .xui
-            .get(0)
+            .xui.first()
             .ok_or("No XUI claims found")
             .unwrap()
             .uhs
@@ -312,14 +310,14 @@ impl Online {
         if let Some(error) = profile.error {
             match error.as_str() {
                 "NOT_FOUND" => {
-                    return Err(Error::AuthenticationError(
+                    Err(Error::AuthenticationError(
                         "Account does not own Minecraft.".to_string(),
                     ))
                 }
-                _ => return Err(Error::AuthenticationError(error)),
-            };
+                _ => Err(Error::AuthenticationError(error)),
+            }
         } else {
-            return Ok(profile);
+            Ok(profile)
         }
     }
 }
