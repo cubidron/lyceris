@@ -21,7 +21,7 @@ use std::{
     fs::{self, create_dir_all, File},
     io::Write,
     path::{PathBuf, MAIN_SEPARATOR_STR},
-    process::Stdio,
+    process::{ExitStatus, Stdio},
     sync::Arc,
     time::Duration,
 };
@@ -412,13 +412,13 @@ impl<R: Reporter> Instance<R> {
         }
     }
 
-    pub fn poll(&mut self) -> Option<bool> {
+    pub fn poll(&mut self) -> Option<ExitStatus> {
         if let Some(child) = self.config.child.as_mut() {
             match child.try_wait() {
                 Ok(Some(status)) => {
                     self.config.child = None; // Process finished
                     info!("Child process exited with: {:?}", status);
-                    Some(true) // Indicate that the process has exited
+                    Some(status) // Indicate that the process has exited
                 }
                 Ok(None) => {
                     // Process is still running
@@ -430,7 +430,7 @@ impl<R: Reporter> Instance<R> {
                 }
             }
         } else {
-            Some(true) // No process to check
+            Some(ExitStatus::default()) // No process to check
         }
     }
 
