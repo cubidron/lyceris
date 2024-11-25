@@ -21,6 +21,8 @@ pub async fn start_server(
 
     let current_dir = env::current_dir()?;
 
+    println!("{}", current_dir.display());
+
     let exe_path = current_dir
         .join("src")
         .join("frpc")
