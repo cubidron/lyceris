@@ -6,6 +6,7 @@
 #![allow(unused)]
 
 pub mod error;
+pub mod frpc;
 pub mod minecraft;
 pub mod network;
 mod prelude;
@@ -24,10 +25,11 @@ pub fn set_locale(locale: &str) {
 #[cfg(test)]
 mod tests {
     use std::io::Write;
-    use std::net::{SocketAddr};
+    use std::net::SocketAddr;
     use std::path::PathBuf;
     use std::sync::mpsc;
 
+    use crate::frpc::start_server;
     use crate::minecraft::auth::online::{self, Online};
     use crate::minecraft::custom::fabric::Fabric;
     use crate::minecraft::custom::optifine::OptiFine;
@@ -41,7 +43,11 @@ mod tests {
     };
     use oauth2::basic::BasicClient;
     use oauth2::reqwest::async_http_client;
-    use oauth2::{AuthType, AuthUrl, AuthorizationCode, ClientId, CsrfToken, DeviceAuthorizationUrl, PkceCodeChallenge, RedirectUrl, Scope, StandardDeviceAuthorizationResponse, TokenResponse, TokenUrl};
+    use oauth2::{
+        AuthType, AuthUrl, AuthorizationCode, ClientId, CsrfToken, DeviceAuthorizationUrl,
+        PkceCodeChallenge, RedirectUrl, Scope, StandardDeviceAuthorizationResponse, TokenResponse,
+        TokenUrl,
+    };
     use reqwest::{Body, Client, Url};
     use serde::{Deserialize, Serialize};
     use serde_json::{json, Value};
@@ -64,7 +70,10 @@ mod tests {
 
     #[test]
     async fn test_launch() {
-        let test = Online::authenticate("M.C514_BAY.2.U.413e6719-12c4-33ca-32a7-f7eaf6065052".to_string()).await.unwrap();
+        let test =
+            Online::authenticate("M.C514_BAY.2.U.413e6719-12c4-33ca-32a7-f7eaf6065052".to_string())
+                .await
+                .unwrap();
 
         println!("{:?}", test);
     }
@@ -74,24 +83,45 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn launch_game() {
-        let mut instance = Instance::new();
-
-        instance.launch(TestReporter{}, Config {
-            version: MinecraftVersion::Release((1,16, None)),
-            ..Config::default()
-        }, |e| println!("{:?}", e)).await.unwrap();
-        loop {
-            println!("Polling check");
-            if let Some(status) = instance.poll() {
-                if status == false {
-                    println!("Not closed yet!");
-                } else{
-                    println!("Closed!");
-                }
-            }
-
-            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-        }
+    async fn test_server() {
+        start_server(
+            "http://45.141.150.191:3000".to_string(),
+            "45.141.150.191".to_string(),
+            7000,
+            "123".to_string(),
+            "localhost".to_string(),
+            25565,
+            "mc".to_string(),
+        )
+        .await.unwrap();
     }
+
+    // #[tokio::test]
+    // async fn launch_game() {
+    //     let mut instance = Instance::new();
+
+    //     instance
+    //         .launch(
+    //             TestReporter {},
+    //             Config {
+    //                 version: MinecraftVersion::Release((1, 16, None)),
+    //                 ..Config::default()
+    //             },
+    //             |e| println!("{:?}", e),
+    //         )
+    //         .await
+    //         .unwrap();
+    //     loop {
+    //         println!("Polling check");
+    //         if let Some(status) = instance.poll() {
+    //             if status == false {
+    //                 println!("Not closed yet!");
+    //             } else {
+    //                 println!("Closed!");
+    //             }
+    //         }
+
+    //         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+    //     }
+    // }
 }
