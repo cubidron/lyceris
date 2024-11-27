@@ -68,60 +68,61 @@ mod tests {
         }
     }
 
-    #[test]
-    async fn test_launch() {
-        let test =
-            Online::authenticate("M.C514_BAY.2.U.413e6719-12c4-33ca-32a7-f7eaf6065052".to_string())
-                .await
-                .unwrap();
+    // #[test]
+    // async fn test_launch() {
+    //     let test =
+    //         Online::authenticate("M.C514_BAY.2.U.413e6719-12c4-33ca-32a7-f7eaf6065052".to_string())
+    //             .await
+    //             .unwrap();
 
-        println!("{:?}", test);
-    }
-    #[test]
-    async fn retrieve_code() {
-        println!("{:?}", Online::create_link());
-    }
-
-    #[tokio::test]
-    async fn test_server() {
-        start_server(
-            "http://45.141.150.191:3000".to_string(),
-            "45.141.150.191".to_string(),
-            7000,
-            "123".to_string(),
-            "localhost".to_string(),
-            25565,
-            "mc".to_string(),
-        )
-        .await.unwrap();
-    }
+    //     println!("{:?}", test);
+    // }
+    // #[test]
+    // async fn retrieve_code() {
+    //     println!("{:?}", Online::create_link());
+    // }
 
     // #[tokio::test]
-    // async fn launch_game() {
-    //     let mut instance = Instance::new();
-
-    //     instance
-    //         .launch(
-    //             TestReporter {},
-    //             Config {
-    //                 version: MinecraftVersion::Release((1, 16, None)),
-    //                 ..Config::default()
-    //             },
-    //             |e| println!("{:?}", e),
-    //         )
-    //         .await
-    //         .unwrap();
-    //     loop {
-    //         println!("Polling check");
-    //         if let Some(status) = instance.poll() {
-    //             if status == false {
-    //                 println!("Not closed yet!");
-    //             } else {
-    //                 println!("Closed!");
-    //             }
-    //         }
-
-    //         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-    //     }
+    // async fn test_server() {
+    //     start_server(
+    //         "http://45.141.150.191:3000".to_string(),
+    //         "45.141.150.191".to_string(),
+    //         7000,
+    //         "123".to_string(),
+    //         "localhost".to_string(),
+    //         25565,
+    //         "mc".to_string(),
+    //     )
+    //     .await.unwrap();
     // }
+
+    #[tokio::test]
+    async fn launch_game() {
+        let mut instance = Instance::new();
+
+        instance
+            .launch(
+                TestReporter {},
+                Config {
+                    version: MinecraftVersion::Custom(Custom::Fabric(Fabric::new(
+                        (1, 21, Some(3)),
+                        "0.16.9".to_string(),
+                    ))),
+                    root_path: PathBuf::from("C:\\Users\\batuh\\AppData\\Roaming\\.elesya"),
+                    java_version: crate::minecraft::java::JavaVersion::Delta,
+                    ..Config::default()
+                },
+                |e| println!("{:?}", e),
+            )
+            .await
+            .unwrap();
+        loop {
+            println!("Polling check");
+            if let Some(status) = instance.poll() {
+                println!("Closed!");
+            }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        }
+    }
 }

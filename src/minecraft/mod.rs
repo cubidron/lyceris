@@ -753,6 +753,32 @@ impl<R: Reporter> Instance<R> {
                 Custom::Fabric(v) => {
                     if let Some(package) = &v.package {
                         for i in &package.libraries {
+                            if let Some(override_package) =
+                                store.package.libraries.iter().find(|l| {
+                                    if let Some(last) =
+                                        l.name.split(":").collect::<Vec<&str>>().last()
+                                    {
+                                        i.name.starts_with(&l.name.replace(last, ""))
+                                    } else {
+                                        false
+                                    }
+                                })
+                            {
+                                let parts = override_package.name.split(':').collect::<Vec<&str>>();
+                                let file_name = format!("{}-{}.jar", parts[1], parts[2]);
+                                let path = self
+                                    .config
+                                    .root_path
+                                    .join("libraries")
+                                    .join(parts[0].replace('.', std::path::MAIN_SEPARATOR_STR))
+                                    .join(parts[1])
+                                    .join(parts[2])
+                                    .join(&file_name);
+                                cp = cp.replace(
+                                    format!("{}{}", path.display(), CLASSPATH_SEPERATOR).as_str(),
+                                    "",
+                                );
+                            }
                             let parts = i.name.split(':').collect::<Vec<&str>>();
                             let file_name = format!("{}-{}.jar", parts[1], parts[2]);
                             let path = self
