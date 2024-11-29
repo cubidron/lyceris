@@ -3,7 +3,7 @@ An open source minecraft launcher library.
 It is still under heavy development and using in production not suggested!
 
 # Quick Start
-```
+```rust
   async fn launch_game() {
       let mut instance = Instance::new();
 
