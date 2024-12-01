@@ -5,7 +5,7 @@ use crate::network::{get, get_json};
 
 use super::{
     // custom::fabric::FabricVersion,
-    custom::{fabric::Fabric, optifine::OptiFine, quilt::Quilt}, java::JavaVersion, json::{Type, VersionManifest}
+    custom::{fabric::Fabric, forge::Forge, optifine::OptiFine, quilt::Quilt}, java::JavaVersion, json::{Type, VersionManifest}
 };
 
 use core::fmt;
@@ -53,7 +53,7 @@ impl ToString for MinecraftVersionBase {
 #[derive(Clone, Deserialize)]
 pub enum Custom {
     OptiFine(OptiFine), 
-    Forge(MinecraftVersionBase, String),
+    Forge(Forge),
     Fabric(Fabric),
     Quilt(Quilt)
 }
@@ -133,8 +133,8 @@ impl fmt::Display for MinecraftVersion {
                     Custom::OptiFine(v)=>{
                         v.version.fmt(f)
                     },
-                    Custom::Forge(v, _)=>{
-                        v.fmt(f)
+                    Custom::Forge(v)=>{
+                        v.version.fmt(f)
                     },
                     Custom::Fabric(v)=>{
                         v.version.fmt(f)

@@ -8,6 +8,7 @@ use crate::{
 };
 use ::serde::{de::DeserializeOwned, Deserialize, Serialize};
 use auth::{online, AuthMethod};
+use custom::forge::run_processors;
 use directories::BaseDirs;
 use futures_util::lock::{Mutex, MutexGuard};
 use lazy_static::lazy_static;
@@ -60,6 +61,7 @@ lazy_static! {
         classpaths: None,
     });
 }
+
 #[derive(Deserialize)]
 pub enum Memory {
     Gigabyte(u16, u16),
@@ -198,6 +200,21 @@ impl<R: Reporter> Instance<R> {
                                 ),
                             }));
                     }
+                    Custom::Forge(v) => {
+                        self.config.version =
+                            MinecraftVersion::Custom(Custom::Forge(custom::forge::Forge {
+                                version: v.version,
+                                loader_version: v.loader_version.to_string(),
+                                package: Some(
+                                    crate::minecraft::custom::forge::get_package_by_version(
+                                        &self.config.root_path,
+                                        v.version.to_string(),
+                                        v.loader_version.to_string(),
+                                    )
+                                    .await?,
+                                ),
+                            }));
+                    }
                     Custom::OptiFine(v) => {
                         self.config.version =
                             MinecraftVersion::Custom(Custom::OptiFine(custom::optifine::OptiFine {
@@ -279,7 +296,7 @@ impl<R: Reporter> Instance<R> {
 
         self.install(&store).await?;
 
-        let args = self.prepare_arguments(&mut store)?;
+        let args = self.prepare_arguments(&mut store).await?;
 
         self.reporter
             .send(Case::SetMessage(t!("launching").to_string()));
@@ -297,7 +314,7 @@ impl<R: Reporter> Instance<R> {
                     .join("javaw.exe"),
             )
             .current_dir(&self.config.root_path)
-            .args(args)
+            .args(args.clone())
             .stdout(Stdio::piped())
             .creation_flags(0x08000000)
             .spawn()
@@ -464,7 +481,10 @@ impl<R: Reporter> Instance<R> {
         false
     }
 
-    fn prepare_arguments(&mut self, store: &mut MutexGuard<'_, Store>) -> Result<Vec<String>> {
+    async fn prepare_arguments(
+        &mut self,
+        store: &mut MutexGuard<'_, Store>,
+    ) -> Result<Vec<String>> {
         let (mut game, mut jvm) = (Vec::<String>::new(), Vec::<String>::new());
         jvm.append(&mut self.config.custom_java_args);
 
@@ -481,7 +501,7 @@ impl<R: Reporter> Instance<R> {
                 jvm.push(format!("-Xmx{}M", max));
             }
         }
-        let classpaths = self.get_classpaths(store)?;
+        let classpaths = self.get_classpaths(store).await?;
 
         self.reporter
             .send(Case::SetMessage(t!("set_arguments").to_string()));
@@ -580,6 +600,46 @@ impl<R: Reporter> Instance<R> {
                     match ext {
                         Custom::Fabric(v) => {
                             if let Some(package) = &v.package {
+                                jvm.push(package.main_class.clone());
+                            }
+                        }
+                        Custom::Forge(v) => {
+                            if let Some(package) = &v.package {
+                                if let Some(arguments) = package.arguments.game.clone() {
+                                    for argument in arguments {
+                                        game.push(argument.to_string());
+                                    }
+                                }
+                                if let Some(arguments) = package.arguments.jvm.clone() {
+                                    for mut argument in arguments {
+                                        if argument.contains("${library_directory}") {
+                                            argument = argument.replace(
+                                                "${library_directory}",
+                                                &self
+                                                    .config
+                                                    .root_path
+                                                    .join("libraries")
+                                                    .display()
+                                                    .to_string(),
+                                            )
+                                        }
+                                        if argument.contains("${version_name}") {
+                                            argument = argument.replace(
+                                                "${version_name}",
+                                                &self
+                                                    .config
+                                                    .version_name,
+                                            )
+                                        }
+                                        if argument.contains("${classpath_separator}") {
+                                            argument = argument.replace(
+                                                "${classpath_separator}",
+                                                CLASSPATH_SEPERATOR,
+                                            )
+                                        }
+                                        jvm.push(argument.to_string());
+                                    }
+                                }
                                 jvm.push(package.main_class.clone());
                             }
                         }
@@ -689,7 +749,7 @@ impl<R: Reporter> Instance<R> {
         Ok(jvm)
     }
 
-    fn get_classpaths(&self, store: &mut MutexGuard<Store>) -> Result<String> {
+    async fn get_classpaths(&self, store: &mut MutexGuard<'_, Store>) -> Result<String> {
         if let Some(cp) = &store.classpaths {
             return Ok(cp.to_string());
         }
@@ -730,7 +790,7 @@ impl<R: Reporter> Instance<R> {
                         .config
                         .root_path
                         .join("libraries")
-                        .join(natives.path.replace('/', std::path::MAIN_SEPARATOR_STR));
+                        .join(&natives.path.replace('/', std::path::MAIN_SEPARATOR_STR));
 
                     cp.push_str(
                         format!(
@@ -793,6 +853,120 @@ impl<R: Reporter> Instance<R> {
                                 format!("{}{}", path.display(), CLASSPATH_SEPERATOR).as_str(),
                             );
                         }
+                    }
+                }
+                Custom::Forge(v) => {
+                    if let Some(package) = &v.package {
+                        for lib in &package.libraries {
+                            if lib.exclude {
+                                continue;
+                            }
+
+                            if let Some(override_package) =
+                                store.package.libraries.iter().find(|l| {
+                                    if let Some(last) =
+                                        l.name.split(":").collect::<Vec<&str>>().last()
+                                    {
+                                        lib.name.starts_with(&l.name.replace(last, ""))
+                                    } else {
+                                        false
+                                    }
+                                })
+                            {
+                                let parts = override_package.name.split(':').collect::<Vec<&str>>();
+                                let file_name = format!("{}-{}.jar", parts[1], parts[2]);
+                                let path = self
+                                    .config
+                                    .root_path
+                                    .join("libraries")
+                                    .join(parts[0].replace('.', std::path::MAIN_SEPARATOR_STR))
+                                    .join(parts[1])
+                                    .join(parts[2])
+                                    .join(&file_name);
+                                cp = cp.replace(
+                                    format!("{}{}", path.display(), CLASSPATH_SEPERATOR).as_str(),
+                                    "",
+                                );
+                            }
+                            
+                            if let Some(downloads) = &lib.downloads {
+                                // If classpath is installable it must have artifact property.
+                                if let Some(artifact) = &downloads.artifact {
+                                    // Parsing the rule for operating system.
+                                    if !self.parse_rule(&Library::from(lib)) {
+                                        let cp_path =
+                                            self.config.root_path.join("libraries").join(
+                                                artifact.path.replace('/', MAIN_SEPARATOR_STR),
+                                            );
+                                        cp.push_str(
+                                            format!("{}{}", cp_path.display(), CLASSPATH_SEPERATOR)
+                                                .as_str(),
+                                        );
+                                    }
+                                }
+                                // Find mappings for natives.
+                                let mut mapping = &None;
+                                if let Some(classifiers) = &downloads.classifiers {
+                                    if cfg!(target_os = "windows") {
+                                        mapping = &classifiers.natives_windows_64;
+                                    } else if cfg!(target_os = "linux") {
+                                        mapping = &classifiers.natives_linux;
+                                    } else if cfg!(target_os = "macos") {
+                                        mapping = &classifiers.natives_macos;
+                                    } else {
+                                        panic!("Unsupported OS");
+                                    }
+                                    if let Some(natives) = mapping {
+                                        let classifier_path =
+                                            self.config.root_path.join("libraries").join(
+                                                natives
+                                                    .path
+                                                    .replace('/', std::path::MAIN_SEPARATOR_STR),
+                                            );
+
+                                        if !cp.contains(&format!(
+                                            "{}{}",
+                                            self.config
+                                                .root_path
+                                                .join("libraries")
+                                                .join(&classifier_path)
+                                                .display(),
+                                            CLASSPATH_SEPERATOR
+                                        )) {
+                                            cp.push_str(
+                                                format!(
+                                                    "{}{}",
+                                                    self.config
+                                                        .root_path
+                                                        .join("libraries")
+                                                        .join(&classifier_path)
+                                                        .display(),
+                                                    CLASSPATH_SEPERATOR
+                                                )
+                                                .as_str(),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        run_processors(
+                            &self
+                                .config
+                                .root_path
+                                .join("versions")
+                                .join(&self.config.version_name)
+                                .join(format!("{}.jar", &self.config.version_name)),
+                            &self.config.root_path.join("libraries"),
+                            &self.config.root_path,
+                            &self.config
+                                .java_path
+                                .join(self.config.java_version.to_string())
+                                .join("bin")
+                                .join("javaw.exe"),
+                            package.clone(),
+                        )
+                        .await?;
                     }
                 }
                 Custom::Quilt(v) => {

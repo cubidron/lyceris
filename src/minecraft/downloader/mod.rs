@@ -16,6 +16,7 @@ use crate::{
 
 use super::{
     java::get_manifest_by_version,
+    json::Library,
     version::{Custom, MinecraftVersion},
     Instance, Store, STORE,
 };
@@ -124,6 +125,22 @@ impl<R: Reporter> Downloader for Instance<R> {
             .join(&self.config.version_name)
             .join(format!("{}.jar", self.config.version_name));
 
+        fs::create_dir_all(
+            self.config
+                .root_path
+                .join("versions")
+                .join(&self.config.version_name),
+        );
+
+        fs::write(
+            self.config
+                .root_path
+                .join("versions")
+                .join(&self.config.version_name)
+                .join(format!("{}.json", self.config.version_name)),
+            serde_json::to_string_pretty(&store.package).unwrap(),
+        )?;
+
         if file_path.is_file() && hash_file(&file_path)? == store.package.downloads.client.sha1 {
             self.reporter.send(Case::AddProgress(1.0));
             return Ok(());
@@ -138,18 +155,6 @@ impl<R: Reporter> Downloader for Instance<R> {
         )
         .await?;
 
-        if let MinecraftVersion::Custom(_) = self.config.version {
-            // todo: Implement a different logic in here
-        } else {
-            fs::write(
-                self.config
-                    .root_path
-                    .join("versions")
-                    .join(&self.config.version_name)
-                    .join(format!("{}.json", self.config.version_name)),
-                serde_json::to_string_pretty(&store.package).unwrap(),
-            )?
-        }
         self.reporter.send(Case::AddProgress(1.0));
 
         Ok(())
@@ -224,6 +229,38 @@ impl<R: Reporter> Downloader for Instance<R> {
                         }
                     }
                 }
+                Custom::Forge(v) => {
+                    if let Some(package) = &v.package {
+                        self.reporter
+                            .send(Case::SetMessage(t!("check_fabric").to_string()));
+                        self.reporter
+                            .send(Case::SetMaxProgress(package.libraries.len() as f64));
+                        let mut progress = 0f64;
+                        for i in &package.libraries {
+                            if let Some(downloads) = &i.downloads {
+                                if let Some(artifact) = &downloads.artifact {
+                                    let file_path = self
+                                        .config
+                                        .root_path
+                                        .join("libraries")
+                                        .join(artifact.path.replace('/', MAIN_SEPARATOR_STR));
+
+                                    if !self.parse_rule(&Library::from(i))
+                                        && (!file_path.is_file()
+                                            || hash_file(&file_path)? != artifact.sha1)
+                                    {
+                                        self.reporter.send(Case::SetMessage(
+                                            t!("download_missing_libraries").to_string(),
+                                        ));
+                                        download_retry(&artifact.url, &file_path, &self.reporter)
+                                            .await?;
+                                    }
+                                }
+                            }
+                            self.reporter.send(Case::AddProgress(1.0));
+                        }
+                    }
+                }
                 Custom::Quilt(v) => {
                     if let Some(package) = &v.package {
                         self.reporter
@@ -264,8 +301,8 @@ impl<R: Reporter> Downloader for Instance<R> {
                             self.reporter.send(Case::AddProgress(1.0));
                         }
                     }
-                },
-                Custom::OptiFine(v)=> {
+                }
+                Custom::OptiFine(v) => {
                     v.generate_files(&self.config.root_path)?;
                 }
                 _ => unimplemented!(),
@@ -292,9 +329,8 @@ impl<R: Reporter> Downloader for Instance<R> {
                     self.reporter.send(Case::AddProgress(1.0));
                     continue;
                 }
-                self.reporter.send(Case::SetMessage(
-                    t!("download_missing_java").to_string(),
-                ));
+                self.reporter
+                    .send(Case::SetMessage(t!("download_missing_java").to_string()));
                 download_retry(&downloads.raw.url, &path, &self.reporter).await?;
             }
             self.reporter.send(Case::AddProgress(1.0));
@@ -314,7 +350,6 @@ impl<R: Reporter> Downloader for Instance<R> {
             .join(self.config.version.to_string());
 
         if natives_path.is_dir() {
-            println!("{}", fs::read_dir(&natives_path)?.count());
             if fs::read_dir(&natives_path)?.count() > 0 {
                 return Ok(());
             }
@@ -347,9 +382,8 @@ impl<R: Reporter> Downloader for Instance<R> {
             if !classifier_url.is_empty() {
                 fs::create_dir_all(&natives_path);
                 let native_file = natives_path.join("native.jar");
-                self.reporter.send(Case::SetMessage(
-                    t!("download_missing_natives").to_string(),
-                ));
+                self.reporter
+                    .send(Case::SetMessage(t!("download_missing_natives").to_string()));
                 download_retry(&classifier_url, &native_file, &self.reporter).await?;
                 extract_zip(&native_file, &natives_path)?;
             }

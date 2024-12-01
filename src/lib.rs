@@ -6,7 +6,6 @@
 #![allow(unused)]
 
 pub mod error;
-pub mod frpc;
 pub mod minecraft;
 pub mod network;
 mod prelude;
@@ -24,14 +23,15 @@ pub fn set_locale(locale: &str) {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::io::Write;
     use std::net::SocketAddr;
     use std::path::PathBuf;
     use std::sync::mpsc;
 
-    use crate::frpc::start_server;
     use crate::minecraft::auth::online::{self, Online};
     use crate::minecraft::custom::fabric::Fabric;
+    use crate::minecraft::custom::forge::{self, Forge};
     use crate::minecraft::custom::optifine::OptiFine;
     use crate::minecraft::custom::quilt::Quilt;
     use crate::minecraft::version::Custom;
@@ -64,7 +64,7 @@ mod tests {
 
     impl Reporter for TestReporter {
         fn send(&self, case: crate::reporter::Case) {
-            println!("{:?}", case);
+            //println!("{:?}", case);
         }
     }
 
@@ -96,27 +96,52 @@ mod tests {
     //     .await.unwrap();
     // }
 
+    // #[tokio::test]
+    // async fn launch_game() {
+    //     let mut instance = Instance::new();
+
+    //     instance
+    //         .launch(
+    //             None::<()>,
+    //             Config {
+    //                 ..Config::default()
+    //             },
+    //             |e| println!("{:?}", e),
+    //         )
+    //         .await
+    //         .unwrap();
+
+    //     loop {
+    //         println!("Polling check");
+    //         if let Some(status) = instance.poll() {
+    //             println!("Closed!");
+    //         }
+
+    //         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+    //     }
+    // }
+
     #[tokio::test]
-    async fn launch_game() {
+    pub async fn test_forge() {
+        let mut forge = Forge::new((1, 20, None), "46.0.14".to_string());
+
         let mut instance = Instance::new();
 
         instance
             .launch(
-                TestReporter {},
+                TestReporter{},
                 Config {
-                    version: MinecraftVersion::Custom(Custom::Fabric(Fabric::new(
-                        (1, 21, Some(3)),
-                        "0.16.9".to_string(),
-                    ))),
-                    root_path: PathBuf::from("C:\\Users\\batuh\\AppData\\Roaming\\.elesya"),
+                    version: MinecraftVersion::Custom(Custom::Forge(forge)),
                     java_version: crate::minecraft::java::JavaVersion::Delta,
                     ..Config::default()
                 },
-                |e| println!("{:?}", e),
+                |e| println!("{}", e),
             )
             .await
             .unwrap();
-        loop {
+
+
+                loop {
             println!("Polling check");
             if let Some(status) = instance.poll() {
                 println!("Closed!");
