@@ -83,7 +83,7 @@ impl MinecraftVersion {
     pub fn get_compatible_java_version(&self) -> JavaVersion {
         match self {
             Self::Release((v, v1, _)) => {
-                if *v >= 1 && *v1 >= 21 {
+                if *v >= 1 && *v1 >= 20 {
                     JavaVersion::Delta
                 }
                 else if *v >= 1 && *v1 >= 16 {
