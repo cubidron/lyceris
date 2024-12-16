@@ -1,7 +1,7 @@
 use std::{
     any::type_name,
     collections::HashMap,
-    env::consts::OS,
+    env::consts::{ARCH, OS},
     fs,
     path::{Path, PathBuf, MAIN_SEPARATOR_STR},
     sync::Arc,
@@ -10,6 +10,7 @@ use std::{
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
 use reqwest::IntoUrl;
+use serde_json::Value;
 use tokio::{
     fs::{create_dir_all, rename},
     sync::{mpsc, Semaphore},
@@ -22,10 +23,13 @@ use crate::{
         downloader::{download, download_multiple},
         fetch::fetch,
     },
-    json::version::{
-        asset_index::{AssetIndex, File},
-        manifest::VersionManifest,
-        meta::vanilla::{self, VersionMeta},
+    json::{
+        java::{self, JavaFileManifest, JavaManifest},
+        version::{
+            asset_index::{AssetIndex, File},
+            manifest::VersionManifest,
+            meta::vanilla::{self, JavaVersion, VersionMeta},
+        },
     },
     util::{
         extract::unzip_file,
@@ -40,15 +44,17 @@ pub const VERSION_MANIFEST_ENDPOINT: &str =
     "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 
 pub const RESOURCES_ENDPOINT: &str = "https://resources.download.minecraft.net";
+pub const JAVA_MANIFEST_ENDPOINT: &str = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
 
 #[derive(Clone)]
 enum FileType {
     Asset { is_virtual: bool, is_map: bool },
     Library,
+    Java,
 }
 
 #[derive(Clone)]
-struct FixFile {
+struct DownloadFile {
     file_name: String,
     sha1: String,
     url: String,
@@ -115,12 +121,7 @@ pub async fn install<T: Loader>(
     if !version_jar_path.exists()
         || !calculate_sha1(&version_jar_path)?.eq(&meta.downloads.client.sha1)
     {
-        download(
-            &meta.downloads.client.url,
-            version_jar_path,
-            &mut emitter,
-        )
-        .await?;
+        download(&meta.downloads.client.url, version_jar_path, &mut emitter).await?;
     }
 
     let natives_path = config.game_dir.join("natives").join(&config.version);
@@ -133,13 +134,57 @@ pub async fn install<T: Loader>(
 
     let mut to_be_extracted: Vec<vanilla::File> = Vec::with_capacity(10);
 
-    let fix_map: Vec<FixFile> = [
+    let java_version = meta.java_version.unwrap_or(JavaVersion {
+        component: "jre-legacy".to_string(),
+        major_version: 0,
+    });
+    let runtime_path = config
+        .runtime_dir
+        .clone()
+        .unwrap_or(config.game_dir.join("runtime"))
+        .join(&java_version.component);
+    let java_manifest: JavaManifest = fetch(JAVA_MANIFEST_ENDPOINT).await?;
+
+    fn get_java_os() -> String {
+        let os = if OS == "macos" { "mac-os" } else { OS };
+
+        let arch: String = match ARCH {
+            "x86" => {
+                if os == "linux" {
+                    "i386".to_string()
+                } else {
+                    "x86".to_string()
+                }
+            }
+            "x86_64" => "x64".to_string(),
+            "aarch64" => "arm64".to_string(),
+            _ => panic!("Unsupported architecture"),
+        };
+
+        format!("{}-{}", os, arch)
+    }
+
+    let java_url = &java_manifest
+        .get(&get_java_os())
+        .ok_or(MinecraftError::NotFound(
+            "Java map by operating system".to_string(),
+        ))?
+        .get(&java_version.component)
+        .ok_or(MinecraftError::UnknownVersion("Java version".to_string()))?
+        .first()
+        .ok_or(MinecraftError::NotFound("Java gamecore".to_string()))?
+        .manifest
+        .url;
+
+    let java_files: JavaFileManifest = fetch(java_url).await?;
+
+    let file_map: Vec<DownloadFile> = [
         asset_index
             .objects
             .iter()
             .map(|(key, meta)| {
                 let hash = &meta.hash;
-                FixFile {
+                DownloadFile {
                     file_name: key.clone(),
                     sha1: hash.clone(),
                     url: format!("{}/{}/{}", RESOURCES_ENDPOINT, &hash[0..2], hash),
@@ -184,7 +229,7 @@ pub async fn install<T: Loader>(
                                     url: url.clone(),
                                 });
 
-                                return Some(FixFile {
+                                return Some(DownloadFile {
                                     file_name: PathBuf::from(url.clone())
                                         .file_name()
                                         .unwrap_or_default()
@@ -201,7 +246,7 @@ pub async fn install<T: Loader>(
                 }
 
                 let artifact = downloads.artifact.as_ref()?;
-                Some(FixFile {
+                Some(DownloadFile {
                     file_name: PathBuf::from(artifact.url.clone())
                         .file_name()
                         .unwrap_or_default()
@@ -217,10 +262,38 @@ pub async fn install<T: Loader>(
                 })
             })
             .collect::<Vec<_>>(),
+        java_files
+            .files
+            .iter()
+            .filter_map(|(name, file)| {
+                let path = runtime_path.join(name.replace("/", MAIN_SEPARATOR_STR));
+                if let Some(downloads) = &file.downloads {
+                    return Some(DownloadFile {
+                        file_name: name
+                            .split(MAIN_SEPARATOR_STR)
+                            .last()
+                            .unwrap_or(name)
+                            .to_string(),
+                        path,
+                        sha1: downloads.raw.sha1.clone(),
+                        url: downloads.raw.url.clone(),
+                        r#type: FileType::Java,
+                    });
+                }
+                None
+            })
+            .collect::<Vec<_>>(),
     ]
     .concat();
 
-    fix_necessary(fix_map, &config.game_dir, &mut emitter).await?;
+    download_necessary(
+        file_map,
+        &config.game_dir,
+        asset_index.map_to_resources.unwrap_or_default()
+            || asset_index.r#virtual.unwrap_or_default(),
+        &mut emitter,
+    )
+    .await?;
 
     if !to_be_extracted.is_empty() {
         create_dir_all(&natives_path).await?;
@@ -234,9 +307,10 @@ pub async fn install<T: Loader>(
     Ok(())
 }
 
-async fn fix_necessary(
-    files: Vec<FixFile>,
+async fn download_necessary(
+    files: Vec<DownloadFile>,
     game_dir: &Path,
+    legacy: bool,
     emitter: &mut Option<&mut EventEmitter>,
 ) -> Result<(), MinecraftError> {
     let broken_ones: Vec<(String, PathBuf)> = files
@@ -244,6 +318,9 @@ async fn fix_necessary(
         .filter_map(|fix_file| {
             if !fix_file.path.exists() {
                 return Some((fix_file.url.clone(), fix_file.path.clone()));
+            } else if fix_file.sha1.is_empty() {
+                println!("Skipping file hash check since hash is empty.");
+                return None;
             } else if let Ok(hash) = calculate_sha1(&fix_file.path) {
                 if hash != fix_file.sha1 {
                     return Some((fix_file.url.clone(), fix_file.path.clone()));
@@ -255,36 +332,38 @@ async fn fix_necessary(
 
     download_multiple(broken_ones, emitter).await?;
 
-    files.par_iter().for_each(|fix_file| {
-        if let FileType::Asset { is_virtual, is_map } = fix_file.r#type {
-            let target_path = if is_virtual {
-                game_dir
-                    .join("assets")
-                    .join("virtual")
-                    .join("legacy")
-                    .join(&fix_file.file_name)
-            } else if is_map {
-                game_dir.join("resources").join(&fix_file.file_name)
-            } else {
-                return;
-            };
+    if legacy {
+        files.par_iter().for_each(|fix_file| {
+            if let FileType::Asset { is_virtual, is_map } = fix_file.r#type {
+                let target_path = if is_virtual {
+                    game_dir
+                        .join("assets")
+                        .join("virtual")
+                        .join("legacy")
+                        .join(&fix_file.file_name)
+                } else if is_map {
+                    game_dir.join("resources").join(&fix_file.file_name)
+                } else {
+                    return;
+                };
 
-            if let Some(parent) = target_path.parent() {
-                if !parent.is_dir() {
-                    fs::create_dir_all(parent).ok();
+                if let Some(parent) = target_path.parent() {
+                    if !parent.is_dir() {
+                        fs::create_dir_all(parent).ok();
+                    }
+                }
+
+                if !target_path.exists() {
+                    fs::copy(&fix_file.path, &target_path).ok();
+                }
+                if let Ok(hash) = calculate_sha1(&target_path) {
+                    if hash != fix_file.sha1 {
+                        fs::copy(&fix_file.path, target_path).ok();
+                    }
                 }
             }
-
-            if !target_path.exists() {
-                fs::copy(&fix_file.path, &target_path).ok();
-            }
-            if let Ok(hash) = calculate_sha1(&target_path) {
-                if hash != fix_file.sha1 {
-                    fs::copy(&fix_file.path, target_path).ok();
-                }
-            }
-        }
-    });
+        });
+    }
 
     Ok(())
 }

@@ -11,5 +11,7 @@ pub enum MinecraftError {
     #[error(transparent)]
     Http(#[from] HttpError),
     #[error("Unknown {0} version")]
-    UnknownVersion(String)
+    UnknownVersion(String),
+    #[error("{0} Not Found")]
+    NotFound(String)
 }
