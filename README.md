@@ -7,10 +7,8 @@
 An open source Minecraft launcher library written in Rust.
 <br/>
 <br/>
-<a href="https://github.com/ShaanCoding/ReadME-Generator/"><strong>Explore the docs »</strong></a>
 
   
-
 
 </p>
 </div>
