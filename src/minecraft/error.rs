@@ -13,5 +13,7 @@ pub enum MinecraftError {
     #[error("Unknown {0} version")]
     UnknownVersion(String),
     #[error("{0} Not Found")]
-    NotFound(String)
+    NotFound(String),
+    #[error("Could not take optional value {0}")]
+    Take(String)
 }

@@ -4,8 +4,15 @@ use std::{
     collections::HashMap,
     env::consts::OS,
     path::{PathBuf, MAIN_SEPARATOR_STR},
+    process::Stdio,
+    sync::Arc,
 };
-use tokio::process::{Child, Command};
+use tokio::{
+    fs,
+    io::{AsyncBufReadExt, BufReader},
+    process::{Child, Command},
+    sync::Mutex,
+};
 
 use crate::{
     auth::AuthMethod,
@@ -41,8 +48,8 @@ pub struct Config<T: Loader> {
 
 pub async fn launch<T: Loader>(
     config: &Config<T>,
-    mut emitter: Option<&mut EventEmitter>,
-) -> Result<Command, MinecraftError> {
+    emitter: Option<Arc<Mutex<EventEmitter>>>,
+) -> Result<Child, MinecraftError> {
     let version_name = config
         .version_name
         .clone()
@@ -223,6 +230,9 @@ pub async fn launch<T: Loader>(
         None => arguments.push("-Xmx2G".to_string()),
     }
 
+    #[cfg(target_os = "macos")]
+    arguments.push("-XstartOnFirstThread".to_string());
+
     meta_arguments.jvm.iter().for_each(|arg| match arg {
         Element::String(e) => arguments.push(replace_each(&variables, e.clone())),
         Element::Class(e) => {
@@ -246,7 +256,7 @@ pub async fn launch<T: Loader>(
         }
     });
 
-    let java_path = config
+    let runtime_dir = config
         .runtime_dir
         .clone()
         .unwrap_or(config.game_dir.join("runtime"))
@@ -257,15 +267,36 @@ pub async fn launch<T: Loader>(
                     major_version: 0,
                 })
                 .component,
-        )
+        );
+
+    #[cfg(not(target_os = "macos"))]
+    let java_path = runtime_dir.join("bin").join("java");
+
+    #[cfg(target_os = "macos")]
+    let java_path = runtime_dir
+        .join("jre.bundle")
+        .join("Contents")
+        .join("Home")
         .join("bin")
         .join("java");
 
-    let mut cmd = Command::new(java_path);
+    let mut child = Command::new(java_path)
+        .args(arguments)
+        .stdout(Stdio::piped())
+        .current_dir(&config.game_dir)
+        .spawn()?;
 
-    println!("{:?}", arguments);
-    cmd.args(arguments);
-    cmd.current_dir(&config.game_dir);
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or(MinecraftError::Take("Child -> stdout".to_string()))?;
 
-    Ok(cmd)
+    tokio::spawn(async move {
+        let mut reader = BufReader::new(stdout).lines();
+        while let Some(line) = reader.next_line().await.unwrap() {
+            emit!(emitter, "console", line);
+        }
+    });
+
+    Ok(child)
 }

@@ -1,5 +1,5 @@
 /// A module for utility functions, including retry logic.
-use std::time::Duration;
+use std::{future::Future, process::Output, time::Duration};
 use tokio::time::sleep;
 
 use super::error::UtilError;
@@ -29,25 +29,20 @@ use super::error::UtilError;
 /// The function can fail in several ways, including but not limited to:
 /// - The operation returns an error after exhausting all retry attempts.
 /// - The operation fails to execute due to other unforeseen issues.
-pub async fn retry<T, F>(max_retries: u32, delay: Duration, operation: F) -> Result<T, UtilError>
-where
-    F: Fn() -> Result<T, String>,
-{
-    let mut attempts = 0;
-
-    while attempts < max_retries {
-        match operation() {
-            Ok(result) => return Ok(result),
-            Err(e) => {
-                attempts += 1;
-                if attempts < max_retries {
-                    sleep(delay).await;
-                } else {
-                    return Err(UtilError::Retry(e, max_retries as u8));
-                }
-            }
+pub async fn retry<A, B: std::future::Future<Output = A>>(
+    f: impl Fn() -> B,
+    handler: impl Fn(&A) -> bool,
+    max_retries: u32,
+    delay: Duration,
+) -> A {
+    let mut retries = 0;
+    loop {
+        retries += 1;
+        let f = f();
+        let r: A = f.await;
+        if handler(&r) || retries >= max_retries {
+            return r;
         }
+        tokio::time::sleep(delay).await;
     }
-
-    unreachable!()
 }

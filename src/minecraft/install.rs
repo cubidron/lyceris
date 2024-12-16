@@ -13,7 +13,7 @@ use reqwest::IntoUrl;
 use serde_json::Value;
 use tokio::{
     fs::{create_dir_all, rename},
-    sync::{mpsc, Semaphore},
+    sync::{mpsc, Mutex, Semaphore},
 };
 
 use event_emitter_rs::EventEmitter;
@@ -64,7 +64,7 @@ struct DownloadFile {
 
 pub async fn install<T: Loader>(
     config: &Config<T>,
-    mut emitter: Option<&mut EventEmitter>,
+    emitter: Option<&Arc<Mutex<EventEmitter>>>,
 ) -> Result<(), MinecraftError> {
     let manifest: VersionManifest = fetch(VERSION_MANIFEST_ENDPOINT).await?;
 
@@ -121,7 +121,7 @@ pub async fn install<T: Loader>(
     if !version_jar_path.exists()
         || !calculate_sha1(&version_jar_path)?.eq(&meta.downloads.client.sha1)
     {
-        download(&meta.downloads.client.url, version_jar_path, &mut emitter).await?;
+        download(&meta.downloads.client.url, version_jar_path, emitter).await?;
     }
 
     let natives_path = config.game_dir.join("natives").join(&config.version);
@@ -291,7 +291,7 @@ pub async fn install<T: Loader>(
         &config.game_dir,
         asset_index.map_to_resources.unwrap_or_default()
             || asset_index.r#virtual.unwrap_or_default(),
-        &mut emitter,
+        emitter,
     )
     .await?;
 
@@ -299,7 +299,7 @@ pub async fn install<T: Loader>(
         create_dir_all(&natives_path).await?;
         for extract in to_be_extracted {
             let path = PathBuf::from(extract.path.unwrap());
-            download(&extract.url, &path, &mut emitter).await?;
+            download(&extract.url, &path, emitter).await?;
             unzip_file(&path, &natives_path).await?;
         }
     }
@@ -311,7 +311,7 @@ async fn download_necessary(
     files: Vec<DownloadFile>,
     game_dir: &Path,
     legacy: bool,
-    emitter: &mut Option<&mut EventEmitter>,
+    emitter: Option<&Arc<Mutex<EventEmitter>>>,
 ) -> Result<(), MinecraftError> {
     let broken_ones: Vec<(String, PathBuf)> = files
         .par_iter()

@@ -104,9 +104,6 @@ impl ParseRule for Option<Vec<Rule>> {
                             }
                         }
                     }
-                    if !should_push {
-                        println!("Not allowed: {:?}", rules);
-                    }
                     should_push
                 }
             }

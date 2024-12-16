@@ -2,11 +2,16 @@ use event_emitter_rs::EventEmitter;
 use futures::{future::join_all, stream, StreamExt};
 use reqwest::{get, IntoUrl};
 /// A module for downloading files asynchronously.
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 use tokio::{
     fs::{create_dir_all, File},
     io::AsyncWriteExt,
     sync::Mutex,
+};
+
+use crate::{
+    emit,
+    util::retry::{self, retry},
 };
 
 use super::error::HttpError;
@@ -43,7 +48,7 @@ use super::error::HttpError;
 pub async fn download<P: AsRef<Path>>(
     url: impl IntoUrl,
     destination: P,
-    emitter: &mut Option<&mut EventEmitter>,
+    emitter: Option<&Arc<Mutex<EventEmitter>>>,
 ) -> Result<u64, HttpError> {
     // Send a get request to the given url.
     let response = get(url).await?;
@@ -74,16 +79,15 @@ pub async fn download<P: AsRef<Path>>(
         // Write chunk to the file.
         file.write_all(&chunk).await?;
 
-        if let Some(ref mut emitter) = emitter {
-            emitter.emit(
-                "single_download_progress",
-                (
-                    destination.as_ref().to_string_lossy().into_owned(),
-                    downloaded,
-                    total_size,
-                ),
-            );
-        }
+        emit!(
+            emitter,
+            "single_download_progress",
+            (
+                destination.as_ref().to_string_lossy().into_owned(),
+                downloaded,
+                total_size,
+            )
+        );
     }
 
     Ok(total_size)
@@ -108,39 +112,38 @@ pub async fn download<P: AsRef<Path>>(
 /// during the download process, it returns an `Err` containing a `HttpError` that describes the failure.
 pub async fn download_multiple<P: AsRef<Path>>(
     downloads: Vec<(impl IntoUrl, P)>,
-    emitter: &mut Option<&mut EventEmitter>, // Keep it as &mut Option<&mut EventEmitter>
+    emitter: Option<&Arc<Mutex<EventEmitter>>>,
 ) -> Result<(), HttpError> {
     let total_files = downloads.len();
     let total_downloaded = Arc::new(Mutex::new(0));
-    let emitter = Arc::new(Mutex::new(emitter));
     // Create a vector to hold the download tasks
     let tasks: Vec<_> = downloads
         .into_iter()
         .map(|(url, destination)| {
             let total_downloaded = Arc::clone(&total_downloaded);
-            let emitter = Arc::clone(&emitter);
             async move {
-                let mut emitter = emitter.lock().await;
                 // Perform the download and get the progress
-                let result = download(url, destination.as_ref(), &mut emitter).await;
+                let result = retry(
+                    || download(url.as_str(), destination.as_ref(), emitter),
+                    Result::is_ok,
+                    3,
+                    Duration::from_secs(3),
+                )
+                .await;
 
                 // Update the progress
-                if let Some(ref mut emitter) = &mut emitter.as_mut() {
-                    // Drop the lock before awaiting
-                    let mut downloaded = total_downloaded.lock().await;
-                    *downloaded += 1;
+                let mut downloaded = total_downloaded.lock().await;
+                *downloaded += 1;
 
-                    // Emit progress (current file progress, total progress, current index, total files)
-                    emitter.emit(
-                        "multiple_download_progress",
-                        (
-                            destination.as_ref().to_string_lossy().into_owned(),
-                            *downloaded as u64,
-                            total_files as u64,
-                        ),
-                    );
-                }
-
+                emit!(
+                    emitter,
+                    "multiple_download_progress",
+                    (
+                        destination.as_ref().to_string_lossy().into_owned(),
+                        *downloaded as u64,
+                        total_files as u64,
+                    )
+                );
                 result // Return the result of the download
             }
         })
