@@ -1,9 +1,40 @@
-# lyceris
 
-An open source minecraft launcher library.
+<br/>
+<div align="center">
 
-# Quick Start
+<h3 align="center">Lyceris</h3>
+<p align="center">
+An open source Minecraft launcher library written in Rust.
+<br/>
+<br/>
+<a href="https://github.com/ShaanCoding/ReadME-Generator/"><strong>Explore the docs »</strong></a>
 
+  
+
+
+</p>
+</div>
+
+## About The Project
+
+![Product Screenshot](https://i.imgur.com/uQ13xHc.png)
+
+Lyceris is written with functional programming paradigm to achieve simplicity. It supports Microsoft authentication, loaders like Fabric, Quilt (more will be implemented soon), multi-threaded control system and download parallelism. It also automatically downloads necessary Java version.
+## Getting Started
+
+Lyceris is easy to add from crates.io!
+### Prerequisites
+
+
+
+- cargo
+  ```sh
+  cargo add lyceris
+  ```
+## Usage
+
+This is the example implementation with using Quilt mod loader in version 1.20.
+Don't forget to change the game directory path!
 ```rust
   async fn launch() {
     let config = Config {
@@ -52,3 +83,12 @@ An open source minecraft launcher library.
 
   }
 ```
+## Roadmap
+
+- [ ] Microsoft Authentication
+- [ ] Forge mod loader support
+
+See the [open issues](https://github.com/cubidron/lyceris/issues) for a full list of proposed features (and known issues).
+## License
+
+Distributed under the MIT License. See [MIT License](https://opensource.org/licenses/MIT) for more information.
