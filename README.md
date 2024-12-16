@@ -6,9 +6,9 @@
 <p align="center">
 An open source Minecraft launcher library written in Rust.
 <br/>
-<br/>
 
-  
+![Static Badge](https://img.shields.io/badge/build-passing-brightgreen)
+![Static Badge](https://img.shields.io/badge/crates.io-v0.2.0-orange)
 
 </p>
 </div>
