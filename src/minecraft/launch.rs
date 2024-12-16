@@ -119,7 +119,7 @@ pub async fn launch<T: Loader>(
     insert_var("${launcher_version}", env!("CARGO_PKG_VERSION").to_string());
 
     // Game configuration variables
-    insert_var("${version_name}", config.version.clone());
+    insert_var("${version_name}", version_name.clone());
     insert_var(
         "${game_directory}",
         config.game_dir.to_string_lossy().into_owned(),
@@ -193,8 +193,8 @@ pub async fn launch<T: Loader>(
             config
                 .game_dir
                 .join("versions")
-                .join(&config.version)
-                .join(format!("{}.jar", &config.version))
+                .join(&version_name)
+                .join(format!("{}.jar", &version_name))
                 .to_string_lossy()
                 .into_owned(),
         );
