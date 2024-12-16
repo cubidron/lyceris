@@ -8,7 +8,7 @@ An open source Minecraft launcher library written in Rust.
 <br/>
 
 ![Static Badge](https://img.shields.io/badge/build-passing-brightgreen)
-![Static Badge](https://img.shields.io/badge/crates.io-v0.2.0-orange)
+[![Static Badge](https://img.shields.io/badge/crates.io-v0.2.0-orange)](https://crates.io/crates/lyceris)
 
 </p>
 </div>
