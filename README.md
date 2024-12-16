@@ -20,15 +20,11 @@ An open source Minecraft launcher library written in Rust.
 Lyceris is written with functional programming paradigm to achieve simplicity. It supports Microsoft authentication, loaders like Fabric, Quilt (more will be implemented soon), multi-threaded control system and download parallelism. It also automatically downloads necessary Java version.
 ## Getting Started
 
-Lyceris is easy to add from crates.io!
-### Prerequisites
-
-
-
 - cargo
   ```sh
   cargo add lyceris
   ```
+
 ## Usage
 
 This is the example implementation with using Quilt mod loader in version 1.20.
