@@ -21,7 +21,7 @@ Lyceris is written with functional programming paradigm to achieve simplicity. I
 ## Getting Started
 
 ```sh
-  cargo add lyceris
+cargo add lyceris
 ```
 
 ## Usage
