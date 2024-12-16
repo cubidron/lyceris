@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 
-use std::f32::consts::E;
+use std::{f32::consts::E, sync::Arc};
 
 use event_emitter_rs::EventEmitter;
 use minecraft::{
@@ -8,6 +8,7 @@ use minecraft::{
     launch::{launch, Config},
     loaders::{fabric::Fabric, quilt::Quilt},
 };
+use tokio::sync::Mutex;
 pub mod auth;
 pub mod http;
 pub mod json;
@@ -19,7 +20,7 @@ pub mod util;
 async fn test() {
     let config = Config {
         game_dir: "C:\\Users\\batuh\\AppData\\Roaming\\.test".into(),
-        version: "1.21.4".to_string(),
+        version: "1.20".to_string(),
         authentication: auth::AuthMethod::Offline {
             username: "Miate".to_string(),
             uuid: "4c4ae28c-16c8-49f4-92a6-8d21e0d8b4a0".to_string(),
@@ -35,20 +36,30 @@ async fn test() {
 
     let mut emitter = EventEmitter::new();
 
-    // emitter.on(
-    //     "multiple_download_progress",
-    //     |(current, max): (u64, u64)| {
-    //         println!("{}/{}", current, max);
-    //     },
-    // );
+    // emitter.on("single_download_progress", |(path, current, max): (String, u64, u64)| {
+    //     println!("{}-{}/{}", path, current, max);
+    // });
 
-    emitter.on("single_download_progress", |(current, max): (u64, u64)| {
-        println!("{}/{}", current, max);
+    emitter.on(
+        "multiple_download_progress",
+        |(path, current, max): (String, u64, u64)| {
+            println!("{}-{}/{}", path, current, max);
+        },
+    );
+
+    emitter.on("console", |line: String| {
+        println!("Line: {}", line);
     });
 
-    install(&config, Some(&mut emitter)).await.unwrap();
+    let emitter = Arc::new(Mutex::new(emitter));
 
-    let mut cmd = launch(&config, Some(&mut emitter)).await.unwrap();
 
-    cmd.spawn().unwrap().wait_with_output().await.unwrap();
+    install(&config, Some(&emitter)).await.unwrap();
+
+    launch(&config, Some(emitter))
+        .await
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
 }
