@@ -1,32 +1,54 @@
 # lyceris
-An open source minecraft launcher library. 
-It is still under heavy development and using in production not suggested!
 
-! This library will be re-constructed soon!
+An open source minecraft launcher library.
 
 # Quick Start
+
 ```rust
-  async fn launch_game() {
-      let mut instance = Instance::new();
+  async fn launch() {
+    let config = Config {
+        game_dir: "Path to the game directory".into(),
+        version: "1.20".to_string(),
+        authentication: auth::AuthMethod::Offline {
+            username: "Notch".to_string(),
+            uuid: "4c4ae28c-16c8-49f4-92a6-8d21e0d8b4a0".to_string(),
+        },
+        memory: None,
+        java_version: None,
+        version_name: None,
+        loader: Some(Quilt("0.27.1".into())),
+        runtime_dir: None,
+        custom_args: vec![],
+        custom_java_args: vec![],
+    };
 
-      instance
-          .launch(
-              None::<()>,
-              Config {
-                  ..Config::default()
-              },
-              |e| println!("{:?}", e),
-          )
-          .await
-          .unwrap();
+    let mut emitter = EventEmitter::new();
 
-      loop {
-          println!("Polling check");
-          if let Some(status) = instance.poll() {
-              println!("Closed!");
-          }
+    // Handling single download progression
+    emitter.on("single_download_progress", |(path, current, max): (String, u64, u64)| {
+        println!("{}-{}/{}", path, current, max);
+    });
 
-          tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-      }
+    // Handling multi download progression
+    emitter.on(
+        "multiple_download_progress",
+        |(path, current, max): (String, u64, u64)| {
+            println!("{}-{}/{}", path, current, max);
+        },
+    );
+
+    // Handling console outputs
+    emitter.on("console", |line: String| {
+        println!("Line: {}", line);
+    });
+
+    let emitter = Arc::new(Mutex::new(emitter));
+
+    install(&config, Some(&emitter)).await?;
+
+    let child = launch(&config, Some(emitter)).await?;
+
+    child.wait().await?;
+
   }
 ```
