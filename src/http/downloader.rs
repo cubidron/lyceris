@@ -62,7 +62,7 @@ pub async fn download<P: AsRef<Path>>(
     }
 
     // Create a file to write the downloaded content
-    let mut file = File::create(destination).await?;
+    let mut file = File::create(&destination).await?;
 
     // Stream the response body
     let mut stream = response.bytes_stream();
@@ -75,7 +75,14 @@ pub async fn download<P: AsRef<Path>>(
         file.write_all(&chunk).await?;
 
         if let Some(ref mut emitter) = emitter {
-            emitter.emit("single_download_progress", (downloaded, total_size));
+            emitter.emit(
+                "single_download_progress",
+                (
+                    destination.as_ref().to_string_lossy().into_owned(),
+                    downloaded,
+                    total_size,
+                ),
+            );
         }
     }
 
@@ -126,7 +133,11 @@ pub async fn download_multiple<P: AsRef<Path>>(
                     // Emit progress (current file progress, total progress, current index, total files)
                     emitter.emit(
                         "multiple_download_progress",
-                        (*downloaded as u64, total_files as u64),
+                        (
+                            destination.as_ref().to_string_lossy().into_owned(),
+                            *downloaded as u64,
+                            total_files as u64,
+                        ),
                     );
                 }
 
