@@ -1,3 +1,4 @@
+use event_emitter_rs::EventEmitter;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     any::type_name,
@@ -7,24 +8,27 @@ use std::{
     sync::Arc,
 };
 use tokio::{fs::create_dir_all, sync::Mutex};
-use event_emitter_rs::EventEmitter;
 
 use crate::{
-    error::Error, http::{
+    error::Error,
+    http::{
         downloader::{download, download_multiple},
         fetch::fetch,
-    }, json::{
+    },
+    json::{
         java::{JavaFileManifest, JavaManifest},
         version::{
             asset_index::AssetIndex,
             manifest::VersionManifest,
             meta::vanilla::{self, JavaVersion, VersionMeta},
         },
-    }, minecraft::{JAVA_MANIFEST_ENDPOINT, RESOURCES_ENDPOINT, VERSION_MANIFEST_ENDPOINT}, util::{
+    },
+    minecraft::{JAVA_MANIFEST_ENDPOINT, RESOURCES_ENDPOINT, VERSION_MANIFEST_ENDPOINT},
+    util::{
         extract::unzip_file,
         hash::calculate_sha1,
         json::{read_json, write_json},
-    }
+    },
 };
 
 use super::{launch::Config, loaders::Loader, version::ParseRule};
@@ -128,7 +132,7 @@ pub async fn install<T: Loader>(
         .join(&java_version.component);
     let java_manifest: JavaManifest = fetch(JAVA_MANIFEST_ENDPOINT).await?;
 
-    fn get_java_os() -> String {
+    fn get_java_os(java_version: &JavaVersion) -> String {
         let os = if OS == "macos" { "mac-os" } else { OS };
 
         let arch = match ARCH {
@@ -144,7 +148,9 @@ pub async fn install<T: Loader>(
             _ => panic!("Unsupported architecture"),
         };
 
-        if (os == "linux" && arch != "i386") || (os == "macos" && arch != "arm64") {
+        if (os == "linux" && arch != "i386")
+            || (os == "mac-os" && (arch != "arm64" || java_version.major_version == 8))
+        {
             os.to_string()
         } else {
             format!("{}-{}", os, arch)
@@ -152,7 +158,7 @@ pub async fn install<T: Loader>(
     }
 
     let java_url = &java_manifest
-        .get(&get_java_os())
+        .get(&get_java_os(&java_version))
         .ok_or(Error::NotFound("Java map by operating system".to_string()))?
         .get(&java_version.component)
         .ok_or(Error::UnknownVersion("Java version".to_string()))?
@@ -195,7 +201,7 @@ pub async fn install<T: Loader>(
                         let classifier = match OS {
                             "windows" => &classifiers.natives_windows,
                             "linux" => &classifiers.natives_linux,
-                            "macos" => &classifiers.natives_osx,
+                            "macos" => &classifiers.natives_macos,
                             _ => panic!("Unknown operating system!"),
                         };
 

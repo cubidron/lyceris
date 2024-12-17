@@ -8,7 +8,8 @@ use std::{
     sync::Arc,
 };
 use tokio::{
-    io::{BufReader, AsyncBufReadExt},
+    fs::{metadata, set_permissions},
+    io::{AsyncBufReadExt, BufReader},
     process::{Child, Command},
     sync::Mutex,
 };
@@ -230,9 +231,6 @@ pub async fn launch<T: Loader>(
         None => arguments.push("-Xmx2G".to_string()),
     }
 
-    #[cfg(target_os = "macos")]
-    arguments.push("-XstartOnFirstThread".to_string());
-
     meta_arguments.jvm.iter().for_each(|arg| match arg {
         Element::String(e) => arguments.push(replace_each(&variables, e.clone())),
         Element::Class(e) => {
@@ -282,10 +280,12 @@ pub async fn launch<T: Loader>(
 
     #[cfg(not(target_os = "windows"))]
     {
-        let mut perms = fs::metadata(&java_path).await?.permissions();
+        let mut perms = metadata(&java_path).await?.permissions();
         perms.set_mode(0o755);
-        fs::set_permissions(&java_path, perms).await?;
+        set_permissions(&java_path, perms).await?;
     }
+
+    println!("{:?}", arguments);
 
     let mut child = Command::new(java_path)
         .args(arguments)

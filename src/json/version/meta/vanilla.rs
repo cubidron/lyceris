@@ -123,7 +123,7 @@ pub struct Library {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extract: Option<Extract>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub natives: Option<Natives>
+    pub natives: Option<Natives>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -147,7 +147,7 @@ pub struct LibraryDownloads {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifact: Option<File>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub classifiers: Option<Classifiers>
+    pub classifiers: Option<Classifiers>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -181,12 +181,19 @@ pub enum Value {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Classifiers {
     #[serde(rename = "natives-linux")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub natives_linux: Option<File>,
 
     #[serde(rename = "natives-osx")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub natives_osx: Option<File>,
 
+    #[serde(rename = "natives-macos")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub natives_macos: Option<File>,
+
     #[serde(rename = "natives-windows")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub natives_windows: Option<File>,
 }
 
@@ -195,7 +202,7 @@ pub enum Action {
     #[serde(rename = "allow")]
     Allow,
     #[serde(rename = "disallow")]
-    Disallow
+    Disallow,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
@@ -216,5 +223,5 @@ pub enum Name {
     LinuxArm64,
 
     #[serde(rename = "linux-arm32")]
-    LinuxArm32
+    LinuxArm32,
 }

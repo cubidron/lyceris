@@ -74,7 +74,7 @@ pub async fn download<P: AsRef<Path>>(
 
     let mut last_data_received;
 
-    while let Some(chunk_result) = timeout(Duration::from_secs(3), stream.next()).await? {
+    while let Some(chunk_result) = timeout(Duration::from_secs(10), stream.next()).await? {
         match chunk_result {
             Ok(chunk) => {
                 // Reset the timer when data is received
@@ -104,7 +104,7 @@ pub async fn download<P: AsRef<Path>>(
         }
 
         // Check if no data has been received in the last 3 seconds
-        if last_data_received.elapsed() > Duration::from_secs(3) {
+        if last_data_received.elapsed() > Duration::from_secs(10) {
             return Err(Error::Download(
                 "Connection dead, no data for 3 seconds.".to_string(),
             ));
