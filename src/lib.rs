@@ -19,7 +19,7 @@ pub mod util;
 #[tokio::test]
 async fn test() {
     let config = Config {
-        game_dir: "C:\\Users\\batuh\\AppData\\Roaming\\.test".into(),
+        game_dir: "/home/batu/Desktop/lyceris/test".into(),
         version: "1.20".to_string(),
         authentication: auth::AuthMethod::Offline {
             username: "Miate".to_string(),
@@ -29,16 +29,16 @@ async fn test() {
         java_version: None,
         version_name: None,
         loader: Some(Quilt("0.27.1".into())),
-        runtime_dir: Some("C:\\Users\\batuh\\AppData\\Roaming\\.minecraft\\runtimes".into()),
+        runtime_dir: None,
         custom_args: vec![],
         custom_java_args: vec![],
     };
 
     let mut emitter = EventEmitter::new();
 
-    // emitter.on("single_download_progress", |(path, current, max): (String, u64, u64)| {
-    //     println!("{}-{}/{}", path, current, max);
-    // });
+     emitter.on("single_download_progress", |(path, current, max): (String, u64, u64)| {
+         println!("{}-{}/{}", path, current, max);
+     });
 
     emitter.on(
         "multiple_download_progress",

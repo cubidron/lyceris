@@ -26,7 +26,11 @@ use crate::{
     util::json::read_json,
 };
 
+#[cfg(not(target_os = "windows"))]
+use std::os::unix::fs::PermissionsExt;
+
 use super::loaders::Loader;
+use super::CLASSPATH_SEPARATOR;
 
 pub enum Memory {
     Megabyte(u64),
@@ -206,7 +210,7 @@ pub async fn launch<T: Loader>(
                 .into_owned(),
         );
 
-        cp.join(";")
+        cp.join(CLASSPATH_SEPARATOR)
     });
 
     fn replace_each(variables: &HashMap<&'static str, String>, arg: String) -> String {
@@ -279,6 +283,15 @@ pub async fn launch<T: Loader>(
         .join("Home")
         .join("bin")
         .join("java");
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut perms = fs::metadata(&java_path).await?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&java_path, perms).await?;
+    }
+
+    println!("{:?}", &arguments);
 
     let mut child = Command::new(java_path)
         .args(arguments)
