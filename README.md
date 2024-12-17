@@ -7,8 +7,10 @@
 An open source Minecraft launcher library written in Rust.
 <br/>
 
-![Static Badge](https://img.shields.io/badge/build-passing-brightgreen)
-[![Static Badge](https://img.shields.io/badge/crates.io-v0.2.0-orange)](https://crates.io/crates/lyceris)
+![Build Passing](https://img.shields.io/badge/build-passing-brightgreen)
+[![Crates.io](https://img.shields.io/crates/v/lyceris.svg)](https://crates.io/crates/lyceris)
+[![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/BatuhanAksoyy/lyceris#license)
+[![Crates.io](https://img.shields.io/crates/d/lyceris.svg)](https://crates.io/crates/lyceris)
 
 </p>
 </div>
