@@ -147,21 +147,19 @@ pub async fn install<T: Loader>(
 
     fn get_java_os() -> String {
         let os = if OS == "macos" { "mac-os" } else { OS };
-
-        let arch: String = match ARCH {
-            "x86" => {
-                if os == "linux" {
-                    "i386".to_string()
-                } else {
-                    "x86".to_string()
-                }
-            }
-            "x86_64" => "x64".to_string(),
-            "aarch64" => "arm64".to_string(),
+    
+        let arch = match ARCH {
+            "x86" => if os == "linux" { "i386" } else { "x86" },
+            "x86_64" => "x64",
+            "aarch64" => "arm64",
             _ => panic!("Unsupported architecture"),
         };
-
-        format!("{}-{}", os, arch)
+    
+        if (os == "linux" && arch != "i386") || (os == "macos" && arch != "arm64") {
+            os.to_string()
+        } else {
+            format!("{}-{}", os, arch)
+        }
     }
 
     let java_url = &java_manifest
