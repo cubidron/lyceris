@@ -110,51 +110,58 @@ pub async fn download<P: AsRef<Path>>(
 ///
 /// This function returns a `Result<(), HttpError>`. On success, it returns `Ok(())`. If an error occurs
 /// during the download process, it returns an `Err` containing a `HttpError` that describes the failure.
-pub async fn download_multiple<P: AsRef<Path>>(
-    downloads: Vec<(impl IntoUrl, P)>,
+pub async fn download_multiple<U, P>(
+    downloads: Vec<(U, P)>,
     emitter: Option<&Arc<Mutex<EventEmitter>>>,
-) -> Result<(), HttpError> {
+) -> Result<(), HttpError>
+where
+    U: IntoUrl + Send,               // URL type that implements IntoUrl
+    P: AsRef<Path> + Send + 'static, // Path type
+{
     let total_files = downloads.len();
     let total_downloaded = Arc::new(Mutex::new(0));
-    // Create a vector to hold the download tasks
-    let tasks: Vec<_> = downloads
-        .into_iter()
-        .map(|(url, destination)| {
-            let total_downloaded = Arc::clone(&total_downloaded);
-            async move {
-                // Perform the download and get the progress
-                let result = retry(
-                    || download(url.as_str(), destination.as_ref(), emitter),
-                    Result::is_ok,
-                    3,
-                    Duration::from_secs(3),
+
+    let tasks = downloads.into_iter().map(|(url, destination)| {
+        let total_downloaded = Arc::clone(&total_downloaded);
+        let emitter = emitter.cloned();
+
+        async move {
+            // Retry download logic
+            retry(
+                || async { download(url.as_str(), destination.as_ref(), emitter.as_ref()).await },
+                Result::is_ok,
+                3,
+                Duration::from_secs(3),
+            )
+            .await?;
+
+            // Update the progress counter
+            let mut downloaded = total_downloaded.lock().await;
+            *downloaded += 1;
+
+            emit!(
+                emitter,
+                "multiple_download_progress",
+                (
+                    destination.as_ref().to_string_lossy().into_owned(),
+                    *downloaded as u64,
+                    total_files as u64,
                 )
-                .await;
+            );
 
-                // Update the progress
-                let mut downloaded = total_downloaded.lock().await;
-                *downloaded += 1;
+            Ok::<(), HttpError>(()) // Explicit return type
+        }
+    });
 
-                emit!(
-                    emitter,
-                    "multiple_download_progress",
-                    (
-                        destination.as_ref().to_string_lossy().into_owned(),
-                        *downloaded as u64,
-                        total_files as u64,
-                    )
-                );
-                result // Return the result of the download
-            }
-        })
-        .collect();
+    // Collect tasks into FuturesUnordered to handle early exit on error
+    let mut futures = stream::FuturesUnordered::new();
+    for task in tasks {
+        futures.push(task);
+    }
 
-    // Wait for all download tasks to complete
-    let results: Vec<Result<_, HttpError>> = join_all(tasks).await;
-
-    // Check for errors in the results
-    for result in results {
-        result?;
+    // Poll futures and stop on the first error
+    while let Some(result) = futures.next().await {
+        result?; // Return early if any task fails
     }
 
     Ok(())
