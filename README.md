@@ -1,5 +1,4 @@
 
-<br/>
 <div align="center">
 
 <h3 align="center">Lyceris</h3>
