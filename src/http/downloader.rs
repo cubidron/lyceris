@@ -1,12 +1,16 @@
 use event_emitter_rs::EventEmitter;
 use futures::{future::join_all, stream, StreamExt};
-use reqwest::{get, IntoUrl};
-/// A module for downloading files asynchronously.
-use std::{path::Path, sync::Arc, time::Duration};
+use reqwest::{get, Client, IntoUrl};
+use std::{
+    path::Path,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::{
     fs::{create_dir_all, File},
     io::AsyncWriteExt,
     sync::Mutex,
+    time::timeout,
 };
 
 use crate::{
@@ -51,7 +55,8 @@ pub async fn download<P: AsRef<Path>>(
     emitter: Option<&Arc<Mutex<EventEmitter>>>,
 ) -> Result<u64, HttpError> {
     // Send a get request to the given url.
-    let response = get(url).await?;
+    let response = Client::builder().build()?.get(url).send().await?;
+
     if !response.status().is_success() {
         return Err(HttpError::Download(response.status().to_string()));
     }
@@ -72,22 +77,43 @@ pub async fn download<P: AsRef<Path>>(
     // Stream the response body
     let mut stream = response.bytes_stream();
 
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
-        downloaded += chunk.len() as u64;
+    let mut last_data_received;
 
-        // Write chunk to the file.
-        file.write_all(&chunk).await?;
+    while let Some(chunk_result) = timeout(Duration::from_secs(3), stream.next()).await? {
+        match chunk_result {
+            Ok(chunk) => {
+                // Reset the timer when data is received
+                last_data_received = Instant::now();
+                downloaded += chunk.len() as u64;
 
-        emit!(
-            emitter,
-            "single_download_progress",
-            (
-                destination.as_ref().to_string_lossy().into_owned(),
-                downloaded,
-                total_size,
-            )
-        );
+                // Write chunk to the file
+                file.write_all(&chunk).await?;
+
+                // Emit progress event
+                emit!(
+                    emitter,
+                    "single_download_progress",
+                    (
+                        destination.as_ref().to_string_lossy().into_owned(),
+                        downloaded,
+                        total_size,
+                    )
+                );
+            }
+            Err(_) => {
+                // Timeout occurred (no chunk received in 3 seconds)
+                return Err(HttpError::Download(
+                    "Connection dead, no data for 3 seconds.".to_string(),
+                ));
+            }
+        }
+
+        // Check if no data has been received in the last 3 seconds
+        if last_data_received.elapsed() > Duration::from_secs(3) {
+            return Err(HttpError::Download(
+                "Connection dead, no data for 3 seconds.".to_string(),
+            ));
+        }
     }
 
     Ok(total_size)
@@ -127,41 +153,49 @@ where
 
         async move {
             // Retry download logic
-            retry(
+            let result = retry(
                 || async { download(url.as_str(), destination.as_ref(), emitter.as_ref()).await },
                 Result::is_ok,
                 3,
-                Duration::from_secs(3),
+                Duration::from_secs(5),
             )
-            .await?;
+            .await;
 
-            // Update the progress counter
-            let mut downloaded = total_downloaded.lock().await;
-            *downloaded += 1;
+            // Check if the download was successful
+            match result {
+                Ok(_) => {
+                    // Update the progress counter
+                    let mut downloaded = total_downloaded.lock().await;
+                    *downloaded += 1;
 
-            emit!(
-                emitter,
-                "multiple_download_progress",
-                (
-                    destination.as_ref().to_string_lossy().into_owned(),
-                    *downloaded as u64,
-                    total_files as u64,
-                )
-            );
+                    emit!(
+                        emitter,
+                        "multiple_download_progress",
+                        (
+                            destination.as_ref().to_string_lossy().into_owned(),
+                            *downloaded as u64,
+                            total_files as u64,
+                        )
+                    );
 
-            Ok::<(), HttpError>(()) // Explicit return type
+                    Ok::<(), HttpError>(())
+                }
+                Err(e) => {
+                    // Return the error immediately
+                    Err(e)
+                }
+            }
         }
     });
 
-    // Collect tasks into FuturesUnordered to handle early exit on error
-    let mut futures = stream::FuturesUnordered::new();
-    for task in tasks {
-        futures.push(task);
-    }
+    // Create a stream of tasks with limited concurrency
+    let mut stream = stream::iter(tasks)
+        .map(|task| async { task.await })
+        .buffered(10); // Limit concurrency here
 
-    // Poll futures and stop on the first error
-    while let Some(result) = futures.next().await {
-        result?; // Return early if any task fails
+    // Poll the stream and handle results
+    while let Some(result) = stream.next().await {
+        result?;
     }
 
     Ok(())
