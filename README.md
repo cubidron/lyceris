@@ -78,7 +78,7 @@ Don't forget to change the game directory path!
 ```
 ## Roadmap
 
-- [ ] Microsoft Authentication
+- [X] Microsoft Authentication
 - [ ] Forge mod loader support
 
 See the [open issues](https://github.com/cubidron/lyceris/issues) for a full list of proposed features (and known issues).
