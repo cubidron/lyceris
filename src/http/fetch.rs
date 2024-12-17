@@ -3,8 +3,6 @@ use reqwest::{IntoUrl, Response};
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 
-use super::error::HttpError;
-
 /// A global instance of the reqwest Client.
 static CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
@@ -17,7 +15,7 @@ pub struct FetchOptions<B: Serialize> {
     pub body: Option<B>,
 }
 
-pub async fn fetch<T: DeserializeOwned>(url: impl IntoUrl) -> Result<T, HttpError> {
+pub async fn fetch<T: DeserializeOwned>(url: impl IntoUrl) -> crate::Result<T> {
     // Call the fetch function with default options
     fetch_with_options::<T, ()>(url, None).await
 }
@@ -56,7 +54,7 @@ pub async fn fetch<T: DeserializeOwned>(url: impl IntoUrl) -> Result<T, HttpErro
 pub async fn fetch_with_options<T: DeserializeOwned, B: Serialize + Default>(
     url: impl IntoUrl,
     options: Option<FetchOptions<B>>,
-) -> Result<T, HttpError> {
+) -> crate::Result<T> {
     let options = options.unwrap_or_default(); // Use default options if none provided
 
     let mut request_builder = CLIENT.request(options.method.clone(), url);

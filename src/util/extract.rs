@@ -1,13 +1,8 @@
-use std::fs::File;
-use std::io::{self, Read};
-use std::path::Path;
-use tokio::fs;
+use std::{fs::File, io::Read, path::Path};
 use tokio::io::AsyncWriteExt;
 use zip::read::ZipArchive;
 
-use super::error::UtilError;
-
-pub async fn unzip_file<P: AsRef<Path>>(zip_path: &P, output_dir: &P) -> Result<(), UtilError> {
+pub async fn unzip_file<P: AsRef<Path>>(zip_path: &P, output_dir: &P) -> crate::Result<()> {
     // Open the ZIP file synchronously
     let file = File::open(zip_path)?;
     let mut archive = ZipArchive::new(file)?;

@@ -8,8 +8,7 @@ use std::{
     sync::Arc,
 };
 use tokio::{
-    fs,
-    io::{AsyncBufReadExt, BufReader},
+    io::{BufReader, AsyncBufReadExt},
     process::{Child, Command},
     sync::Mutex,
 };
@@ -17,12 +16,9 @@ use tokio::{
 use crate::{
     auth::AuthMethod,
     emit,
-    json::version::{
-        manifest::VersionManifest,
-        meta::vanilla::{Arguments, Element, JavaVersion, Value, VersionMeta},
-    },
-    macros::emit,
-    minecraft::{error::MinecraftError, version::ParseRule},
+    error::Error,
+    json::version::meta::vanilla::{Arguments, Element, JavaVersion, Value, VersionMeta},
+    minecraft::version::ParseRule,
     util::json::read_json,
 };
 
@@ -53,7 +49,7 @@ pub struct Config<T: Loader> {
 pub async fn launch<T: Loader>(
     config: &Config<T>,
     emitter: Option<Arc<Mutex<EventEmitter>>>,
-) -> Result<Child, MinecraftError> {
+) -> crate::Result<Child> {
     let version_name = config
         .version_name
         .clone()
@@ -291,8 +287,6 @@ pub async fn launch<T: Loader>(
         fs::set_permissions(&java_path, perms).await?;
     }
 
-    println!("{:?}", &arguments);
-
     let mut child = Command::new(java_path)
         .args(arguments)
         .stdout(Stdio::piped())
@@ -302,7 +296,7 @@ pub async fn launch<T: Loader>(
     let stdout = child
         .stdout
         .take()
-        .ok_or(MinecraftError::Take("Child -> stdout".to_string()))?;
+        .ok_or(Error::Take("Child -> stdout".to_string()))?;
 
     tokio::spawn(async move {
         let mut reader = BufReader::new(stdout).lines();

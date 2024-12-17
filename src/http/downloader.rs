@@ -1,6 +1,6 @@
 use event_emitter_rs::EventEmitter;
-use futures::{future::join_all, stream, StreamExt};
-use reqwest::{get, Client, IntoUrl};
+use futures::{stream, StreamExt};
+use reqwest::{Client, IntoUrl};
 use std::{
     path::Path,
     sync::Arc,
@@ -13,12 +13,7 @@ use tokio::{
     time::timeout,
 };
 
-use crate::{
-    emit,
-    util::retry::{self, retry},
-};
-
-use super::error::HttpError;
+use crate::{emit, error::Error, util::retry::retry};
 
 /// Downloads a file from the specified URL and saves it to the given destination.
 ///
@@ -53,12 +48,12 @@ pub async fn download<P: AsRef<Path>>(
     url: impl IntoUrl,
     destination: P,
     emitter: Option<&Arc<Mutex<EventEmitter>>>,
-) -> Result<u64, HttpError> {
+) -> crate::Result<u64> {
     // Send a get request to the given url.
     let response = Client::builder().build()?.get(url).send().await?;
 
     if !response.status().is_success() {
-        return Err(HttpError::Download(response.status().to_string()));
+        return Err(Error::Download(response.status().to_string()));
     }
 
     // Get the total size of the file to use at progression
@@ -102,7 +97,7 @@ pub async fn download<P: AsRef<Path>>(
             }
             Err(_) => {
                 // Timeout occurred (no chunk received in 3 seconds)
-                return Err(HttpError::Download(
+                return Err(Error::Download(
                     "Connection dead, no data for 3 seconds.".to_string(),
                 ));
             }
@@ -110,7 +105,7 @@ pub async fn download<P: AsRef<Path>>(
 
         // Check if no data has been received in the last 3 seconds
         if last_data_received.elapsed() > Duration::from_secs(3) {
-            return Err(HttpError::Download(
+            return Err(Error::Download(
                 "Connection dead, no data for 3 seconds.".to_string(),
             ));
         }
@@ -139,7 +134,7 @@ pub async fn download<P: AsRef<Path>>(
 pub async fn download_multiple<U, P>(
     downloads: Vec<(U, P)>,
     emitter: Option<&Arc<Mutex<EventEmitter>>>,
-) -> Result<(), HttpError>
+) -> crate::Result<()>
 where
     U: IntoUrl + Send,               // URL type that implements IntoUrl
     P: AsRef<Path> + Send + 'static, // Path type
@@ -178,7 +173,7 @@ where
                         )
                     );
 
-                    Ok::<(), HttpError>(())
+                    Ok::<(), Error>(())
                 }
                 Err(e) => {
                     // Return the error immediately
@@ -189,8 +184,7 @@ where
     });
 
     // Create a stream of tasks with limited concurrency
-    let mut stream = stream::iter(tasks)
-        .buffered(10); // Limit concurrency here
+    let mut stream = stream::iter(tasks).buffered(10); // Limit concurrency here
 
     // Poll the stream and handle results
     while let Some(result) = stream.next().await {

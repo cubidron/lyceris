@@ -3,8 +3,6 @@
 use crate::json::version::meta::vanilla::VersionMeta;
 use std::path::Path;
 
-use super::error::MinecraftError;
-
 pub mod fabric;
 pub mod quilt;
 
@@ -13,11 +11,11 @@ pub trait Loader {
         &self,
         game_dir: &Path,
         meta: VersionMeta,
-    ) -> Result<VersionMeta, MinecraftError>;
+    ) -> crate::Result<VersionMeta>;
 }
 
 impl Loader for () {
-    async fn merge(&self, _: &Path, meta: VersionMeta) -> Result<VersionMeta, MinecraftError> {
+    async fn merge(&self, _: &Path, meta: VersionMeta) -> crate::Result<VersionMeta> {
         Ok(meta)
     }
 }

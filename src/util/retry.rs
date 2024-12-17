@@ -1,8 +1,5 @@
 /// A module for utility functions, including retry logic.
-use std::{future::Future, process::Output, time::Duration};
-use tokio::time::sleep;
-
-use super::error::UtilError;
+use std::time::Duration;
 
 /// Retries a given asynchronous operation a specified number of times with a delay.
 ///
