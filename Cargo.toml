@@ -4,6 +4,16 @@ version = "0.3.0"
 edition = "2021"
 description = "An open source Minecraft launcher library."
 license = "MIT OR Apache-2.0"
+authors = ["Batuhan Aksoy"]
+keywords = [
+    "Minecraft Launcher Library",
+    "Minecraft",
+    "Launcher",
+    "Library",
+    "lyceris",
+    "java",
+    "rust",
+]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
