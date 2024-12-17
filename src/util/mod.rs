@@ -1,5 +1,5 @@
-pub mod retry;
-pub mod error;
-pub mod json;
-pub mod hash;
 pub mod extract;
+pub mod hash;
+pub mod json;
+pub mod retry;
+pub mod base64;

@@ -1,6 +1,6 @@
 use std::env::consts::OS;
 
-use crate::json::version::meta::vanilla::{Action, Name, Os, Rule};
+use crate::json::version::meta::vanilla::{Action, Name, Rule};
 
 use super::TARGET_ARCH;
 

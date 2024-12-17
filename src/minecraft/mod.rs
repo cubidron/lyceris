@@ -1,8 +1,7 @@
-pub mod launch;
-pub mod version;
 pub mod install;
-pub mod error;
+pub mod launch;
 pub mod loaders;
+pub mod version;
 
 #[cfg(target_os = "windows")]
 pub const TARGET_OS: &str = "windows";
@@ -26,3 +25,12 @@ pub const CLASSPATH_SEPARATOR: &str = ";";
 
 #[cfg(not(target_os = "windows"))]
 pub const CLASSPATH_SEPARATOR: &str = ":";
+
+pub const JAVA_MANIFEST_ENDPOINT: &str = 
+    "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
+
+pub const VERSION_MANIFEST_ENDPOINT: &str =
+    "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
+    
+pub const RESOURCES_ENDPOINT: &str = 
+    "https://resources.download.minecraft.net";

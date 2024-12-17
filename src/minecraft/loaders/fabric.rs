@@ -1,14 +1,14 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    error::Error,
     http::fetch::fetch,
     json::version::meta::{
         custom::CustomMeta,
         vanilla::{self, VersionMeta},
     },
-    minecraft::error::MinecraftError,
 };
 
 use super::Loader;
@@ -54,11 +54,7 @@ struct Version {
 pub struct Fabric(pub String);
 
 impl Loader for Fabric {
-    async fn merge(
-        &self,
-        game_dir: &Path,
-        mut meta: VersionMeta,
-    ) -> Result<VersionMeta, MinecraftError> {
+    async fn merge(&self, game_dir: &Path, mut meta: VersionMeta) -> crate::Result<VersionMeta> {
         let loaders: Vec<FabricLoader> =
             fetch(format!("{}{}", VERSION_META_ENDPOINT, "versions/loader")).await?;
         let versions: Vec<Version> =
@@ -67,11 +63,11 @@ impl Loader for Fabric {
         let loader = loaders
             .into_iter()
             .find(|v| v.version == self.0)
-            .ok_or(MinecraftError::UnknownVersion("Fabric Loader".into()))?;
+            .ok_or(Error::UnknownVersion("Fabric Loader".into()))?;
         let fabric = versions
             .into_iter()
             .find(|v| v.version == meta.id)
-            .ok_or(MinecraftError::UnknownVersion("Fabric".into()))?;
+            .ok_or(Error::UnknownVersion("Fabric".into()))?;
 
         let version: CustomMeta = fetch(format!(
             "{}versions/loader/{}/{}/profile/json",

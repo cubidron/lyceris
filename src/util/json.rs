@@ -1,12 +1,9 @@
-use std::path::Path;
-
 use serde::{de::DeserializeOwned, Serialize};
+use std::path::Path;
 use tokio::{
     fs::{create_dir_all, File},
-    io::{AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncReadExt, AsyncWriteExt},
 };
-
-use super::error::UtilError;
 
 /// Asynchronously reads a JSON file and deserializes its contents into a specified type.
 ///
@@ -32,7 +29,7 @@ use super::error::UtilError;
 /// - The specified file does not exist or cannot be opened.
 /// - There is an error reading the file's contents.
 /// - The contents of the file cannot be deserialized into the specified type `T`.
-pub async fn read_json<T: DeserializeOwned, P: AsRef<Path>>(file_path: P) -> Result<T, UtilError> {
+pub async fn read_json<T: DeserializeOwned, P: AsRef<Path>>(file_path: P) -> crate::Result<T> {
     let mut file = File::open(file_path).await?;
     let mut contents = String::new();
     file.read_to_string(&mut contents).await?;
@@ -67,7 +64,7 @@ pub async fn read_json<T: DeserializeOwned, P: AsRef<Path>>(file_path: P) -> Res
 pub async fn write_json<T: Serialize, P: AsRef<Path>>(
     file_path: P,
     value: &T,
-) -> Result<(), UtilError> {
+) -> crate::Result<()> {
     let json_string = serde_json::to_string(value)?;
     if let Some(parent) = file_path.as_ref().parent() {
         if !parent.is_dir() {

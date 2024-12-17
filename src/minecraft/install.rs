@@ -1,50 +1,33 @@
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     any::type_name,
-    collections::HashMap,
     env::consts::{ARCH, OS},
     fs,
     path::{Path, PathBuf, MAIN_SEPARATOR_STR},
     sync::Arc,
 };
-
-use rayon::iter::ParallelIterator;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
-use reqwest::IntoUrl;
-use serde_json::Value;
-use tokio::{
-    fs::{create_dir_all, rename},
-    sync::{mpsc, Mutex, Semaphore},
-};
-
+use tokio::{fs::create_dir_all, sync::Mutex};
 use event_emitter_rs::EventEmitter;
 
 use crate::{
-    http::{
+    error::Error, http::{
         downloader::{download, download_multiple},
         fetch::fetch,
-    },
-    json::{
-        java::{self, JavaFileManifest, JavaManifest},
+    }, json::{
+        java::{JavaFileManifest, JavaManifest},
         version::{
-            asset_index::{AssetIndex, File},
+            asset_index::AssetIndex,
             manifest::VersionManifest,
             meta::vanilla::{self, JavaVersion, VersionMeta},
         },
-    },
-    util::{
+    }, minecraft::{JAVA_MANIFEST_ENDPOINT, RESOURCES_ENDPOINT, VERSION_MANIFEST_ENDPOINT}, util::{
         extract::unzip_file,
         hash::calculate_sha1,
         json::{read_json, write_json},
-    },
+    }
 };
 
-use super::{error::MinecraftError, launch::Config, loaders::Loader, version::ParseRule};
-
-pub const VERSION_MANIFEST_ENDPOINT: &str =
-    "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
-
-pub const RESOURCES_ENDPOINT: &str = "https://resources.download.minecraft.net";
-pub const JAVA_MANIFEST_ENDPOINT: &str = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
+use super::{launch::Config, loaders::Loader, version::ParseRule};
 
 #[derive(Clone)]
 enum FileType {
@@ -65,7 +48,7 @@ struct DownloadFile {
 pub async fn install<T: Loader>(
     config: &Config<T>,
     emitter: Option<&Arc<Mutex<EventEmitter>>>,
-) -> Result<(), MinecraftError> {
+) -> crate::Result<()> {
     let manifest: VersionManifest = fetch(VERSION_MANIFEST_ENDPOINT).await?;
 
     let version_name = config
@@ -92,7 +75,7 @@ pub async fn install<T: Loader>(
                 .versions
                 .iter()
                 .find(|version| version.id.eq(&config.version))
-                .ok_or(MinecraftError::UnknownVersion("Vanilla".to_string()))?
+                .ok_or(Error::UnknownVersion("Vanilla".to_string()))?
                 .url,
         )
         .await?;
@@ -147,14 +130,20 @@ pub async fn install<T: Loader>(
 
     fn get_java_os() -> String {
         let os = if OS == "macos" { "mac-os" } else { OS };
-    
+
         let arch = match ARCH {
-            "x86" => if os == "linux" { "i386" } else { "x86" },
+            "x86" => {
+                if os == "linux" {
+                    "i386"
+                } else {
+                    "x86"
+                }
+            }
             "x86_64" => "x64",
             "aarch64" => "arm64",
             _ => panic!("Unsupported architecture"),
         };
-    
+
         if (os == "linux" && arch != "i386") || (os == "macos" && arch != "arm64") {
             os.to_string()
         } else {
@@ -164,13 +153,11 @@ pub async fn install<T: Loader>(
 
     let java_url = &java_manifest
         .get(&get_java_os())
-        .ok_or(MinecraftError::NotFound(
-            "Java map by operating system".to_string(),
-        ))?
+        .ok_or(Error::NotFound("Java map by operating system".to_string()))?
         .get(&java_version.component)
-        .ok_or(MinecraftError::UnknownVersion("Java version".to_string()))?
+        .ok_or(Error::UnknownVersion("Java version".to_string()))?
         .first()
-        .ok_or(MinecraftError::NotFound("Java gamecore".to_string()))?
+        .ok_or(Error::NotFound("Java gamecore".to_string()))?
         .manifest
         .url;
 
@@ -310,7 +297,7 @@ async fn download_necessary(
     game_dir: &Path,
     legacy: bool,
     emitter: Option<&Arc<Mutex<EventEmitter>>>,
-) -> Result<(), MinecraftError> {
+) -> crate::Result<()> {
     let broken_ones: Vec<(String, PathBuf)> = files
         .par_iter()
         .filter_map(|fix_file| {
