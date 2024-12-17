@@ -190,7 +190,6 @@ where
 
     // Create a stream of tasks with limited concurrency
     let mut stream = stream::iter(tasks)
-        .map(|task| async { task.await })
         .buffered(10); // Limit concurrency here
 
     // Poll the stream and handle results
