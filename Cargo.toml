@@ -12,6 +12,7 @@ keywords = [
     "game",
     "java",
 ]
+repository = "https://github.com/BatuhanAksoyy/lyceris"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
