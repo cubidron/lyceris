@@ -1,13 +1,11 @@
-use event_emitter_rs::EventEmitter;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     any::type_name,
     env::consts::{ARCH, OS},
     fs,
     path::{Path, PathBuf, MAIN_SEPARATOR_STR},
-    sync::Arc,
 };
-use tokio::{fs::create_dir_all, sync::Mutex};
+use tokio::fs::create_dir_all;
 
 use crate::{
     error::Error,
@@ -31,7 +29,7 @@ use crate::{
     },
 };
 
-use super::{launch::Config, loaders::Loader, version::ParseRule};
+use super::{emitter::Emitter, launch::Config, loaders::Loader, version::ParseRule};
 
 #[derive(Clone)]
 enum FileType {
@@ -51,7 +49,7 @@ struct DownloadFile {
 
 pub async fn install<T: Loader>(
     config: &Config<T>,
-    emitter: Option<&Arc<Mutex<EventEmitter>>>,
+    emitter: Option<&Emitter>,
 ) -> crate::Result<()> {
     let manifest: VersionManifest = fetch(VERSION_MANIFEST_ENDPOINT).await?;
 
@@ -302,7 +300,7 @@ async fn download_necessary(
     files: Vec<DownloadFile>,
     game_dir: &Path,
     legacy: bool,
-    emitter: Option<&Arc<Mutex<EventEmitter>>>,
+    emitter: Option<&Emitter>,
 ) -> crate::Result<()> {
     let broken_ones: Vec<(String, PathBuf)> = files
         .par_iter()

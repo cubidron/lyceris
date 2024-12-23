@@ -1,4 +1,3 @@
-use event_emitter_rs::EventEmitter;
 use futures::{stream, StreamExt};
 use reqwest::{Client, IntoUrl};
 use std::{
@@ -13,7 +12,11 @@ use tokio::{
     time::timeout,
 };
 
-use crate::{emit, error::Error, util::retry::retry};
+use crate::{
+    error::Error,
+    minecraft::emitter::{Emit, Emitter},
+    util::retry::retry,
+};
 
 /// Downloads a file from the specified URL and saves it to the given destination.
 ///
@@ -47,7 +50,7 @@ use crate::{emit, error::Error, util::retry::retry};
 pub async fn download<P: AsRef<Path>>(
     url: impl IntoUrl,
     destination: P,
-    emitter: Option<&Arc<Mutex<EventEmitter>>>,
+    emitter: Option<&Emitter>,
 ) -> crate::Result<u64> {
     // Send a get request to the given url.
     let response = Client::builder().build()?.get(url).send().await?;
@@ -85,15 +88,16 @@ pub async fn download<P: AsRef<Path>>(
                 file.write_all(&chunk).await?;
 
                 // Emit progress event
-                emit!(
-                    emitter,
-                    "single_download_progress",
-                    (
-                        destination.as_ref().to_string_lossy().into_owned(),
-                        downloaded,
-                        total_size,
+                emitter
+                    .emit(
+                        "single_download_progress",
+                        (
+                            destination.as_ref().to_string_lossy().into_owned(),
+                            downloaded,
+                            total_size,
+                        ),
                     )
-                );
+                    .await;
             }
             Err(_) => {
                 // Timeout occurred (no chunk received in 3 seconds)
@@ -133,7 +137,7 @@ pub async fn download<P: AsRef<Path>>(
 /// during the download process, it returns an `Err` containing a `HttpError` that describes the failure.
 pub async fn download_multiple<U, P>(
     downloads: Vec<(U, P)>,
-    emitter: Option<&Arc<Mutex<EventEmitter>>>,
+    emitter: Option<&Emitter>,
 ) -> crate::Result<()>
 where
     U: IntoUrl + Send,               // URL type that implements IntoUrl
@@ -144,12 +148,11 @@ where
 
     let tasks = downloads.into_iter().map(|(url, destination)| {
         let total_downloaded = Arc::clone(&total_downloaded);
-        let emitter = emitter.cloned();
 
         async move {
             // Retry download logic
             let result = retry(
-                || async { download(url.as_str(), destination.as_ref(), emitter.as_ref()).await },
+                || async { download(url.as_str(), destination.as_ref(), emitter).await },
                 Result::is_ok,
                 3,
                 Duration::from_secs(5),
@@ -163,15 +166,16 @@ where
                     let mut downloaded = total_downloaded.lock().await;
                     *downloaded += 1;
 
-                    emit!(
-                        emitter,
-                        "multiple_download_progress",
-                        (
-                            destination.as_ref().to_string_lossy().into_owned(),
-                            *downloaded as u64,
-                            total_files as u64,
+                    emitter
+                        .emit(
+                            "multiple_download_progress",
+                            (
+                                destination.as_ref().to_string_lossy().into_owned(),
+                                *downloaded as u64,
+                                total_files as u64,
+                            ),
                         )
-                    );
+                        .await;
 
                     Ok::<(), Error>(())
                 }

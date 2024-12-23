@@ -1,22 +1,17 @@
-use event_emitter_rs::EventEmitter;
 use std::{
     any::type_name,
     collections::HashMap,
     env::consts::OS,
     path::{PathBuf, MAIN_SEPARATOR_STR},
-    process::Stdio,
-    sync::Arc,
+    process::Stdio
 };
 use tokio::{
-    fs::{metadata, set_permissions},
     io::{AsyncBufReadExt, BufReader},
-    process::{Child, Command},
-    sync::Mutex,
+    process::{Child, Command}
 };
 
 use crate::{
     auth::AuthMethod,
-    emit,
     error::Error,
     json::version::meta::vanilla::{Arguments, Element, JavaVersion, Value, VersionMeta},
     minecraft::version::ParseRule,
@@ -24,10 +19,13 @@ use crate::{
 };
 
 #[cfg(not(target_os = "windows"))]
-use std::os::unix::fs::PermissionsExt;
+use {
+    fs::{metadata, set_permissions},
+    std::os::unix::fs::PermissionsExt,
+};
 
-use super::loaders::Loader;
 use super::CLASSPATH_SEPARATOR;
+use super::{emitter::Emitter, loaders::Loader};
 
 pub enum Memory {
     Megabyte(u64),
@@ -49,7 +47,7 @@ pub struct Config<T: Loader> {
 
 pub async fn launch<T: Loader>(
     config: &Config<T>,
-    emitter: Option<Arc<Mutex<EventEmitter>>>,
+    emitter: Option<&Emitter>,
 ) -> crate::Result<Child> {
     let version_name = config
         .version_name
@@ -298,12 +296,15 @@ pub async fn launch<T: Loader>(
         .take()
         .ok_or(Error::Take("Child -> stdout".to_string()))?;
 
-    tokio::spawn(async move {
-        let mut reader = BufReader::new(stdout).lines();
-        while let Some(line) = reader.next_line().await.unwrap() {
-            emit!(emitter, "console", line);
-        }
-    });
+    if let Some(emitter) = emitter {
+        let emitter = emitter.clone();
+        tokio::spawn(async move{
+            let mut reader = BufReader::new(stdout).lines();
+            while let Some(line) = reader.next_line().await.unwrap() {
+                emitter.emit("console", line).await;
+            }
+        });
+    }
 
     Ok(child)
 }
