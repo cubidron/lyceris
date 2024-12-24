@@ -20,7 +20,7 @@ use crate::{
 
 #[cfg(not(target_os = "windows"))]
 use {
-    fs::{metadata, set_permissions},
+    tokio::fs::{metadata, set_permissions},
     std::os::unix::fs::PermissionsExt,
 };
 
