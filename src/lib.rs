@@ -11,7 +11,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod tests {
-    use std::env::{self, current_dir};
+    use std::env::current_dir;
 
     use crate::{
         auth::AuthMethod,
@@ -20,10 +20,10 @@ mod tests {
 
     #[tokio::test]
     async fn launch_game() {
-        let current_dir = env::current_dir().unwrap();
+        let current_dir = current_dir().unwrap();
         let config = ConfigBuilder::new(
-            current_dir.join("game"),
-            "1.7.2",
+            current_dir.join("target").join("game"),
+            "1.16.4",
             AuthMethod::Offline {
                 username: "Miate",
                 uuid: None,
