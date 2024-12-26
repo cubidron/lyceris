@@ -1,7 +1,9 @@
 pub mod install;
 pub mod launch;
-pub mod loaders;
-pub mod version;
+pub mod loader;
+pub mod parse;
+pub mod emitter;
+pub mod config;
 
 #[cfg(target_os = "windows")]
 pub const TARGET_OS: &str = "windows";
