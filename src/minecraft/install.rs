@@ -1,10 +1,8 @@
-use event_emitter_rs::EventEmitter;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     env::consts::{ARCH, OS},
     fs,
     path::{Path, PathBuf, MAIN_SEPARATOR_STR},
-    sync::Arc,
 };
 use tokio::{fs::create_dir_all, process::Command};
 
@@ -425,7 +423,7 @@ async fn download_necessary(
     files: Vec<DownloadFile>,
     game_dir: &Path,
     legacy: bool,
-    emitter: Option<&Arc<Mutex<EventEmitter>>>,
+    emitter: Option<&Emitter>,
 ) -> crate::Result<()> {
     let broken_ones: Vec<(String, PathBuf)> = files
         .par_iter()

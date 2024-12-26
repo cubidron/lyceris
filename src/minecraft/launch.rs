@@ -1,7 +1,6 @@
 use std::{collections::HashMap, process::Stdio};
 
 use tokio::{
-    fs::{metadata, set_permissions},
     io::{AsyncBufReadExt, BufReader},
     process::{Child, Command},
 };
@@ -9,7 +8,6 @@ use uuid::Uuid;
 
 use crate::{
     auth::AuthMethod,
-    emit,
     error::Error,
     json::version::meta::vanilla::{Arguments, Element, Value, VersionMeta},
     minecraft::{config::Memory, parse::ParseRule},
@@ -27,7 +25,7 @@ use super::{emitter::Emitter, loader::Loader};
 
 pub async fn launch<T: Loader>(
     config: &Config<T>,
-    emitter: Option<Arc<Mutex<EventEmitter>>>,
+    emitter: Option<&Emitter>,
 ) -> crate::Result<Child> {
     let version_name = config.get_version_name();
     let mut arguments = Vec::<String>::with_capacity(100);

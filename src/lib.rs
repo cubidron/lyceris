@@ -2,7 +2,6 @@ pub mod auth;
 pub mod error;
 pub mod http;
 pub mod json;
-pub mod macros;
 pub mod minecraft;
 pub mod util;
 
