@@ -1,87 +1,44 @@
-use event_emitter_rs::EventEmitter;
-use std::{
-    any::type_name,
-    collections::HashMap,
-    env::consts::OS,
-    path::{PathBuf, MAIN_SEPARATOR_STR},
-    process::Stdio,
-    sync::Arc,
-};
+use std::{collections::HashMap, process::Stdio};
+
 use tokio::{
     fs::{metadata, set_permissions},
     io::{AsyncBufReadExt, BufReader},
     process::{Child, Command},
-    sync::Mutex,
 };
 
 use crate::{
     auth::AuthMethod,
     emit,
     error::Error,
-    json::version::meta::vanilla::{Arguments, Element, JavaVersion, Value, VersionMeta},
-    minecraft::version::ParseRule,
+    json::version::meta::vanilla::{Arguments, Element, Value, VersionMeta},
+    minecraft::{config::Memory, parse::ParseRule},
     util::json::read_json,
 };
 
 #[cfg(not(target_os = "windows"))]
-use std::os::unix::fs::PermissionsExt;
+use {
+    std::os::unix::fs::PermissionsExt,
+    tokio::fs::{metadata, set_permissions},
+};
 
-use super::loaders::Loader;
-use super::CLASSPATH_SEPARATOR;
-
-pub enum Memory {
-    Megabyte(u64),
-    Gigabyte(u16),
-}
-
-pub struct Config<T: Loader> {
-    pub game_dir: PathBuf,
-    pub version: String,
-    pub authentication: AuthMethod,
-    pub memory: Option<Memory>,
-    pub version_name: Option<String>,
-    pub loader: Option<T>,
-    pub java_version: Option<String>,
-    pub runtime_dir: Option<PathBuf>,
-    pub custom_java_args: Vec<String>,
-    pub custom_args: Vec<String>,
-}
+use super::{config::Config, CLASSPATH_SEPARATOR};
+use super::{emitter::Emitter, loader::Loader};
 
 pub async fn launch<T: Loader>(
     config: &Config<T>,
     emitter: Option<Arc<Mutex<EventEmitter>>>,
 ) -> crate::Result<Child> {
-    let version_name = config
-        .version_name
-        .clone()
-        .unwrap_or(if config.loader.is_some() {
-            let name = format!(
-                "{}-{}",
-                type_name::<T>().split("::").last().unwrap_or("Custom"),
-                config.version
-            );
-            name
-        } else {
-            config.version.to_string()
-        });
-
+    let version_name = config.get_version_name();
     let mut arguments = Vec::<String>::with_capacity(100);
-    let meta: VersionMeta = read_json(
-        &config
-            .game_dir
-            .join("versions")
-            .join(&version_name)
-            .join(format!("{}.json", &version_name)),
-    )
-    .await?;
+    let meta: VersionMeta = read_json(&config.get_version_json_path()).await?;
 
-    let meta_arguments = meta.arguments.unwrap_or(Arguments {
+    let meta_arguments = meta.arguments.unwrap_or_else(|| Arguments {
         game: meta
             .minecraft_arguments
             .unwrap_or_default()
-            .split(" ")
+            .split_whitespace()
             .map(|argument| Element::String(argument.to_string()))
-            .collect::<Vec<Element>>(),
+            .collect(),
         jvm: vec![
             Element::String("-Djava.library.path=${natives_directory}".to_string()),
             Element::String("-cp".to_string()),
@@ -132,19 +89,13 @@ pub async fn launch<T: Loader>(
         "${game_directory}",
         config.game_dir.to_string_lossy().into_owned(),
     );
-    insert_var(
-        "${assets_root}",
-        config
-            .game_dir
-            .join("assets")
-            .to_string_lossy()
-            .into_owned(),
-    );
+
+    let assets_dir = config.get_assets_path();
+
+    insert_var("${assets_root}", assets_dir.to_string_lossy().into_owned());
     insert_var(
         "${game_assets}",
-        config
-            .game_dir
-            .join("assets")
+        assets_dir
             .join("virtual")
             .join("legacy")
             .to_string_lossy()
@@ -155,70 +106,47 @@ pub async fn launch<T: Loader>(
     insert_var(
         "${natives_directory}",
         config
-            .game_dir
-            .join("natives")
+            .get_natives_path()
             .join(&config.version)
-            .display()
-            .to_string(),
+            .to_string_lossy()
+            .into_owned(),
     );
+
+    let libraries_path = config.get_libraries_path();
     insert_var("${classpath}", {
-        let lib_path = config.game_dir.join("libraries");
-        let mut cp = Vec::<String>::new();
+        let mut cp: Vec<String> = meta
+            .libraries
+            .iter()
+            .filter_map(|lib| {
+                lib.downloads.as_ref().and_then(|downloads| {
+                    downloads.artifact.as_ref().and_then(|artifact| {
+                        artifact.path.as_ref().and_then(|path| {
+                            if lib.rules.parse_rule() && lib.natives.is_none() {
+                                Some(libraries_path.join(path).to_string_lossy().into_owned())
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                })
+            })
+            .collect();
 
-        meta.libraries.iter().for_each(|lib| {
-            let mut push_path_if_valid = |path: Option<String>| {
-                if let Some(valid_path) = path {
-                    let formatted_path = valid_path.replace("/", MAIN_SEPARATOR_STR);
-                    if !formatted_path.is_empty() {
-                        cp.push(lib_path.join(formatted_path).to_string_lossy().into_owned());
-                    }
-                }
-            };
-
-            if let Some(downloads) = &lib.downloads {
-                if let Some(artifact) = &downloads.artifact {
-                    if lib.rules.parse_rule() {
-                        push_path_if_valid(artifact.path.clone());
-                    }
-                }
-
-                if let Some(classifiers) = &downloads.classifiers {
-                    let natives_path = match OS {
-                        "windows" => &classifiers.natives_windows,
-                        "linux" => &classifiers.natives_linux,
-                        "macos" => &classifiers.natives_osx,
-                        _ => panic!("Unknown operating system."),
-                    };
-
-                    if let Some(natives) = natives_path {
-                        push_path_if_valid(natives.path.clone());
-                    }
-                }
-            }
-        });
-
-        cp.push(
-            config
-                .game_dir
-                .join("versions")
-                .join(&version_name)
-                .join(format!("{}.jar", &version_name))
-                .to_string_lossy()
-                .into_owned(),
-        );
+        cp.push(config.get_version_jar_path().to_string_lossy().into_owned());
 
         cp.join(CLASSPATH_SEPARATOR)
     });
 
     fn replace_each(variables: &HashMap<&'static str, String>, arg: String) -> String {
-        let mut arg = arg;
-        for (k, v) in variables {
-            if arg.contains(*k) {
-                arg = arg.replace(*k, v);
-            }
-        }
-        arg
+        variables.iter().fold(arg, |arg, (k, v)| arg.replace(*k, v))
     }
+
+    // Forge JVM variables
+    insert_var(
+        "${library_directory}",
+        libraries_path.to_string_lossy().into_owned(),
+    );
+    insert_var("${classpath_separator}", CLASSPATH_SEPARATOR.to_string());
 
     match &config.memory {
         Some(memory) => arguments.push(format!(
@@ -254,37 +182,9 @@ pub async fn launch<T: Loader>(
         }
     });
 
-    let runtime_dir = config
-        .runtime_dir
-        .clone()
-        .unwrap_or(config.game_dir.join("runtime"))
-        .join(
-            meta.java_version
-                .unwrap_or(JavaVersion {
-                    component: "jre-legacy".to_string(),
-                    major_version: 0,
-                })
-                .component,
-        );
+    let java_path = config.get_java_path(&meta.java_version.unwrap_or_default());
 
-    #[cfg(not(target_os = "macos"))]
-    let java_path = runtime_dir.join("bin").join("java");
-
-    #[cfg(target_os = "macos")]
-    let java_path = runtime_dir
-        .join("jre.bundle")
-        .join("Contents")
-        .join("Home")
-        .join("bin")
-        .join("java");
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let mut perms = metadata(&java_path).await?.permissions();
-        perms.set_mode(0o755);
-        set_permissions(&java_path, perms).await?;
-    }
-
+    println!("Using java version: {:?}", java_path);
     println!("{:?}", arguments);
 
     let mut child = Command::new(java_path)
@@ -296,14 +196,17 @@ pub async fn launch<T: Loader>(
     let stdout = child
         .stdout
         .take()
-        .ok_or(Error::Take("Child -> stdout".to_string()))?;
+        .ok_or_else(|| Error::Take("Child -> stdout".to_string()))?;
 
-    tokio::spawn(async move {
-        let mut reader = BufReader::new(stdout).lines();
-        while let Some(line) = reader.next_line().await.unwrap() {
-            emit!(emitter, "console", line);
-        }
-    });
+    if let Some(emitter) = emitter {
+        let emitter = emitter.clone();
+        tokio::spawn(async move {
+            let mut reader = BufReader::new(stdout).lines();
+            while let Some(line) = reader.next_line().await.unwrap() {
+                emitter.emit("console", line).await;
+            }
+        });
+    }
 
     Ok(child)
 }

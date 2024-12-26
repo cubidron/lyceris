@@ -4,9 +4,11 @@ use thiserror::Error;
 pub enum Error {
     #[error("Unknown {0} version")]
     UnknownVersion(String),
-    #[error("{0} Not Found")]
+    #[error("{0} not found")]
     NotFound(String),
-    #[error("Could not take optional value {0}")]
+    #[error("Could not parse: {0}")]
+    Parse(String),
+    #[error("Could not take optional value: {0}")]
     Take(String),
     #[error("Download failed with status code: {0}")]
     Download(String),
@@ -16,6 +18,10 @@ pub enum Error {
     Authentication(String),
     #[error("Malformed token: {0}")]
     MalformedToken(String),
+    #[error("Operation failed: {0}")]
+    Fail(String),
+    #[error("Unsupported architecture")]
+    UnsupportedArchitecture,
     #[error(transparent)]
     IO(#[from] tokio::io::Error),
     #[error(transparent)]

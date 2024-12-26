@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::vanilla::Element;
+use super::vanilla::{Element, LibraryDownloads};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -10,7 +10,7 @@ pub struct CustomMeta {
     pub release_time: String,
     pub time: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub package_type: Option<String>,
+    pub r#type: Option<String>,
     pub main_class: String,
     pub arguments: Arguments,
     pub libraries: Vec<Library>,
@@ -18,15 +18,17 @@ pub struct CustomMeta {
 
 #[derive(Serialize, Deserialize)]
 pub struct Arguments {
-    pub game: Vec<Element>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub game: Option<Vec<Element>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jvm: Option<Vec<Element>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Library {
     pub name: String,
-    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub md5: Option<String>,
@@ -42,4 +44,7 @@ pub struct Library {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub downloads: Option<LibraryDownloads>,
 }

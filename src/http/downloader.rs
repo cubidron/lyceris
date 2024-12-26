@@ -13,7 +13,7 @@ use tokio::{
     time::timeout,
 };
 
-use crate::{emit, error::Error, util::retry::retry};
+use crate::{emit, error::Error, minecraft::emitter::Emitter, util::retry::retry};
 
 /// Downloads a file from the specified URL and saves it to the given destination.
 ///
@@ -47,9 +47,10 @@ use crate::{emit, error::Error, util::retry::retry};
 pub async fn download<P: AsRef<Path>>(
     url: impl IntoUrl,
     destination: P,
-    emitter: Option<&Arc<Mutex<EventEmitter>>>,
+    emitter: Option<&Emitter>,
 ) -> crate::Result<u64> {
     // Send a get request to the given url.
+    println!("Downloading file: {:?}", &url.as_str());
     let response = Client::builder().build()?.get(url).send().await?;
 
     if !response.status().is_success() {
