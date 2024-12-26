@@ -23,6 +23,7 @@ Lyceris is written with functional programming paradigm to achieve simplicity. I
 - [X] Forge (Above version 1.12.2)
 - [X] Fabric
 - [X] Quilt
+
 Versions below 1.12.2 is not supported and won't be supported in the future.
 
 ## Getting Started
