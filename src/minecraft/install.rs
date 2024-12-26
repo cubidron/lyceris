@@ -333,6 +333,8 @@ async fn execute_processors_if_exists(
                 .collect::<Vec<String>>()
                 .join(CLASSPATH_SEPARATOR);
 
+            println!("{}", classpath);
+
             let main_class = read_file_from_jar(
                 &libraries_path
                     .join(parse_lib_path(&processor.jar)?)
@@ -349,6 +351,8 @@ async fn execute_processors_if_exists(
             .ok_or_else(|| Error::NotFound("Main-Class of processor".to_string()))?
             .trim()
             .to_string();
+
+            println!("{}", main_class);
 
             let args = processor
                 .args
@@ -382,6 +386,8 @@ async fn execute_processors_if_exists(
                 })
                 .collect::<Vec<_>>();
 
+            println!("{:?}", parse_lib_path(&processor.jar)?);
+
             let child = Command::new(
                 config
                     .get_java_path(
@@ -393,8 +399,9 @@ async fn execute_processors_if_exists(
             )
             .arg("-cp")
             .arg(format!(
-                "{};{}",
+                "{}{}{}",
                 classpath,
+                CLASSPATH_SEPARATOR,
                 libraries_path
                     .join(parse_lib_path(&processor.jar)?)
                     .to_string_lossy()
