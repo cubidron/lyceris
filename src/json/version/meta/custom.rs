@@ -6,17 +6,13 @@ use super::vanilla::{Element, LibraryDownloads};
 #[serde(rename_all = "camelCase")]
 pub struct CustomMeta {
     pub id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub inherits_from: Option<String>,
+    pub inherits_from: String,
     pub release_time: String,
     pub time: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub r#type: Option<String>,
     pub main_class: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub minecraft_arguments: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub arguments: Option<Arguments>,
+    pub arguments: Arguments,
     pub libraries: Vec<Library>,
 }
 

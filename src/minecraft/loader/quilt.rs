@@ -97,13 +97,11 @@ impl Loader for Quilt {
         );
 
         if let Some(ref mut arguments) = meta.arguments {
-            if let Some(custom_arguments) = version.arguments {
-                if let Some(jvm) = custom_arguments.jvm {
-                    arguments.jvm.extend(jvm);
-                }
-                if let Some(game) = custom_arguments.game {
-                    arguments.game.extend(game);
-                }
+            if let Some(jvm) = version.arguments.jvm {
+                arguments.jvm.extend(jvm);
+            }
+            if let Some(game) = version.arguments.game {
+                arguments.game.extend(game);
             }
         }
 
