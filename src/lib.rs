@@ -15,7 +15,10 @@ mod tests {
 
     use crate::{
         auth::AuthMethod,
-        minecraft::{config::ConfigBuilder, emitter::Emitter, install::install, launch::launch, loader::forge::Forge},
+        minecraft::{
+            config::ConfigBuilder, emitter::Emitter, install::install, launch::launch,
+            loader::forge::Forge,
+        },
     };
 
     #[tokio::test]
@@ -23,13 +26,13 @@ mod tests {
         let current_dir = current_dir().unwrap();
         let config = ConfigBuilder::new(
             current_dir.join("target").join("game"),
-            "1.7.2",
+            "1.16.5",
             AuthMethod::Offline {
                 username: "Miate",
                 uuid: None,
             },
         )
-        .loader(Forge("10.12.2.1161"))
+        .loader(Forge("36.2.42"))
         .build();
 
         let emitter = Emitter::default();

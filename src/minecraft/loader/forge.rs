@@ -110,6 +110,8 @@ impl Loader for Forge {
         let installer_json_path = profiles_path.join(format!("installer-{}.json", &version_name));
         let installer_path = temp_dir().join(format!("forge-{}.jar", version_name));
 
+        println!("{}", installer_path.to_string_lossy());
+
         if is_legacy {
             let legacy_installer: LegacyInstaller = if installer_json_path.is_file() {
                 read_json(&installer_json_path).await?
@@ -147,7 +149,7 @@ impl Loader for Forge {
             let mut seen = HashSet::new();
 
             meta.libraries
-                .extend(merge_libraries(config, version.libraries, &mut seen));
+                .extend(merge_libraries(config, version.libraries, &mut seen, true));
 
             if let Some(ref mut arguments) = meta.minecraft_arguments {
                 if let Some(custom_arguments) = version.minecraft_arguments {
@@ -181,13 +183,14 @@ impl Loader for Forge {
             };
 
             meta.processors = installer.processors;
+
+            process_data(config, &installer_path, &mut meta.data).await?;
+
             meta.data = Some(merge_data(
                 config,
                 &meta,
                 installer.data.unwrap_or_default(),
             ));
-
-            process_data(config, &installer_path, &mut meta.data).await?;
 
             extract_specific_directory(
                 &installer_path,
@@ -207,10 +210,10 @@ impl Loader for Forge {
             let mut seen = HashSet::new();
 
             meta.libraries
-                .extend(merge_libraries(config, version.libraries, &mut seen));
+                .extend(merge_libraries(config, version.libraries, &mut seen, false));
             if let Some(libraries) = installer.libraries {
                 meta.libraries
-                    .extend(merge_libraries(config, libraries, &mut seen));
+                    .extend(merge_libraries(config, libraries, &mut seen, true));
             }
 
             if let Some(ref mut arguments) = meta.arguments {
@@ -310,6 +313,7 @@ async fn process_data(
                 let file = file_path.split('/').last().ok_or(crate::Error::NotFound(
                     "File not found for the processor".to_string(),
                 ))?;
+                println!("{}", file);
                 let file_name = file.split('.').next().ok_or(crate::Error::NotFound(
                     "File name not found for the processor".to_string(),
                 ))?;
@@ -321,13 +325,15 @@ async fn process_data(
                     config.version, file_name, ext
                 );
 
+                println!("ASD: {}", path);
+
                 extract_specific_file(
                     installer_path,
                     file_path,
                     &config
                         .game_dir
                         .join("libraries")
-                        .join(parse_lib_path(&path).unwrap()),
+                        .join(parse_lib_path(&path)?),
                 )
                 .await?;
 
@@ -342,6 +348,7 @@ fn merge_libraries(
     config: &Config<impl Loader>,
     libraries: Vec<Library>,
     seen: &mut HashSet<String>,
+    skip_args: bool,
 ) -> Vec<vanilla::Library> {
     libraries
         .into_iter()
@@ -358,9 +365,8 @@ fn merge_libraries(
                                 artifact: Some(vanilla::File {
                                     path: Some(
                                         config
-                                            .game_dir
-                                            .join("libraries")
-                                            .join(path.replace("/", MAIN_SEPARATOR_STR))
+                                            .get_libraries_path()
+                                            .join(path)
                                             .to_string_lossy()
                                             .into_owned(),
                                     ),
@@ -374,7 +380,7 @@ fn merge_libraries(
                             name: lib.name.clone(),
                             rules: None,
                             natives: None,
-                            skip_args: true,
+                            skip_args,
                         });
                     }
                 }

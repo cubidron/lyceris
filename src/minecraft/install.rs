@@ -383,11 +383,13 @@ async fn execute_processors_if_exists(
                 .collect::<Vec<_>>();
 
             let child = Command::new(
-                config.get_java_path(
-                    meta.java_version
-                        .as_ref()
-                        .unwrap_or(&JavaVersion::default()),
-                ),
+                config
+                    .get_java_path(
+                        meta.java_version
+                            .as_ref()
+                            .unwrap_or(&JavaVersion::default()),
+                    )
+                    .await?,
             )
             .arg("-cp")
             .arg(format!(

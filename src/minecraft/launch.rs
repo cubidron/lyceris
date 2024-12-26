@@ -17,12 +17,6 @@ use crate::{
     util::json::read_json,
 };
 
-#[cfg(not(target_os = "windows"))]
-use {
-    std::os::unix::fs::PermissionsExt,
-    tokio::fs::{metadata, set_permissions},
-};
-
 use super::{config::Config, CLASSPATH_SEPARATOR};
 use super::{emitter::Emitter, loader::Loader};
 
@@ -180,7 +174,9 @@ pub async fn launch<T: Loader>(
         }
     });
 
-    let java_path = config.get_java_path(&meta.java_version.unwrap_or_default());
+    let java_path = config
+        .get_java_path(&meta.java_version.unwrap_or_default())
+        .await?;
 
     println!("args: {:?}", arguments);
 
@@ -189,8 +185,6 @@ pub async fn launch<T: Loader>(
         .stdout(Stdio::piped())
         .current_dir(&config.game_dir)
         .spawn()?;
-
-
 
     let stdout = child
         .stdout

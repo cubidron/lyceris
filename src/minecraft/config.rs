@@ -1,5 +1,8 @@
 use std::path::{Path, PathBuf};
 
+#[cfg(not(target_os = "windows"))]
+use std::os::unix::fs::PermissionsExt;
+
 use crate::{auth::AuthMethod, json::version::meta::vanilla::JavaVersion};
 
 use super::loader::Loader;
@@ -149,7 +152,7 @@ impl<T: Loader> Config<T> {
         self.game_dir.join("libraries")
     }
 
-    pub fn get_java_path(&self, version: &JavaVersion) -> PathBuf {
+    pub async fn get_java_path(&self, version: &JavaVersion) -> crate::Result<PathBuf> {
         #[cfg(not(target_os = "macos"))]
         let java_path = self
             .get_runtime_path()
@@ -160,7 +163,7 @@ impl<T: Loader> Config<T> {
         #[cfg(target_os = "macos")]
         let java_path = self
             .get_runtime_path()
-            .join(version.component)
+            .join(&version.component)
             .join("jre.bundle")
             .join("Contents")
             .join("Home")
@@ -174,7 +177,7 @@ impl<T: Loader> Config<T> {
             tokio::fs::set_permissions(&java_path, perms).await?;
         }
 
-        java_path
+        Ok(java_path)
     }
 
     pub fn get_versions_path(&self) -> PathBuf {
