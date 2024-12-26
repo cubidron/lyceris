@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     env::temp_dir,
-    path::MAIN_SEPARATOR_STR,
 };
 
 use serde::{Deserialize, Serialize};
@@ -12,7 +11,7 @@ use crate::{
         custom::{CustomMeta, Library},
         vanilla::{self, VersionMeta},
     },
-    minecraft::{config::Config, emitter::Emitter, parse::parse_lib_path},
+    minecraft::{config::Config, emitter::Emitter, parse::parse_lib_path, TARGET_OS},
     util::{
         extract::{extract_specific_directory, extract_specific_file},
         json::read_json,
@@ -80,97 +79,11 @@ impl Loader for Forge {
         let version_json_path = profiles_path.join(format!("version-{}.json", &version_name));
         let installer_path = temp_dir().join(format!("forge-{}.jar", version_name));
 
-<<<<<<< HEAD
-        println!("{}", installer_path.to_string_lossy());
-
-        if is_legacy {
-            let legacy_installer: LegacyInstaller = if installer_json_path.is_file() {
-                read_json(&installer_json_path).await?
-            } else {
-                download_installer(&installer_path, &version_name, emitter).await?;
-                extract_specific_file(
-                    &installer_path,
-                    "install_profile.json",
-                    &installer_json_path,
-                )
-                .await?;
-                read_json(&installer_json_path).await?
-            };
-
-            let installer = legacy_installer.install;
-            let version = legacy_installer.version_info;
-
-            if let Some(path) = installer.path {
-                if let Some(file_path) = installer.file_path {
-                    let target_path = config.get_libraries_path().join(parse_lib_path(&path)?);
-
-                    if !target_path.is_file() {
-                        extract_specific_file(&installer_path, &file_path, &target_path).await?;
-                    }
-                }
-            }
-
-            meta.libraries.retain(|lib| {
-                version
-                    .libraries
-                    .iter()
-                    .all(|v_lib| v_lib.name.split(':').nth(1) != lib.name.split(':').nth(1))
-            });
-
-            let mut seen = HashSet::new();
-
-            meta.libraries
-                .extend(merge_libraries(config, version.libraries, &mut seen, true));
-
-            if let Some(ref mut arguments) = meta.minecraft_arguments {
-                if let Some(custom_arguments) = version.minecraft_arguments {
-                    arguments.push_str(&format!(" {}", custom_arguments));
-                }
-            }
-
-            meta.main_class = version.main_class;
-        } else {
-            let version_json_path = profiles_path.join(format!("version-{}.json", &version_name));
-
-            let installer: Installer = if installer_json_path.is_file() {
-                read_json(&installer_json_path).await?
-            } else {
-                download_installer(&installer_path, &version_name, emitter).await?;
-                extract_specific_file(
-                    &installer_path,
-                    "install_profile.json",
-                    &installer_json_path,
-                )
-                .await?;
-                read_json(&installer_json_path).await?
-            };
-
-            let version: CustomMeta = if version_json_path.is_file() {
-                read_json(&version_json_path).await?
-            } else {
-                download_installer(&installer_path, &version_name, emitter).await?;
-                extract_specific_file(&installer_path, "version.json", &version_json_path).await?;
-                read_json(&version_json_path).await?
-            };
-
-            meta.processors = installer.processors;
-
-            process_data(config, &installer_path, &mut meta.data).await?;
-
-            meta.data = Some(merge_data(
-                config,
-                &meta,
-                installer.data.unwrap_or_default(),
-            ));
-
-            extract_specific_directory(
-=======
         let installer: Installer = if installer_json_path.is_file() {
             read_json(&installer_json_path).await?
         } else {
             download_installer(&installer_path, &version_name, emitter).await?;
             extract_specific_file(
->>>>>>> parent of d4f2b4f (🚧 feat: Forge Legacy)
                 &installer_path,
                 "install_profile.json",
                 &installer_json_path,
@@ -188,19 +101,21 @@ impl Loader for Forge {
         };
 
         meta.processors = installer.processors;
+
+        process_data(config, &installer_path, &mut meta.data).await?;
+
+        meta.data = Some(merge_data(
+            config,
+            &meta,
+            installer.data.unwrap_or_default(),
+        ));
+        meta.processors = installer.processors;
         meta.data = Some(merge_data(
             config,
             &meta,
             installer.data.unwrap_or_default(),
         ));
 
-<<<<<<< HEAD
-            meta.libraries
-                .extend(merge_libraries(config, version.libraries, &mut seen, false));
-            if let Some(libraries) = installer.libraries {
-                meta.libraries
-                    .extend(merge_libraries(config, libraries, &mut seen, true));
-=======
         process_data(config, &installer_path, &mut meta.data).await?;
 
         extract_specific_directory(
@@ -221,14 +136,17 @@ impl Loader for Forge {
         let mut seen = HashSet::new();
 
         meta.libraries
-            .extend(merge_libraries(config, version.libraries, &mut seen));
-        meta.libraries
-            .extend(merge_libraries(config, installer.libraries, &mut seen));
+            .extend(merge_libraries(config, version.libraries, &mut seen, false));
+        meta.libraries.extend(merge_libraries(
+            config,
+            installer.libraries,
+            &mut seen,
+            true,
+        ));
 
         if let Some(ref mut arguments) = meta.arguments {
             if let Some(jvm) = version.arguments.jvm {
                 arguments.jvm.extend(jvm);
->>>>>>> parent of d4f2b4f (🚧 feat: Forge Legacy)
             }
             if let Some(game) = version.arguments.game {
                 arguments.game.extend(game);
@@ -332,8 +250,6 @@ async fn process_data(
                     config.version, file_name, ext
                 );
 
-                println!("ASD: {}", path);
-
                 extract_specific_file(
                     installer_path,
                     file_path,
@@ -364,6 +280,32 @@ fn merge_libraries(
                 return None;
             }
 
+            if let Some(url) = lib.url {
+                let path = parse_lib_path(&lib.name).ok()?;
+                return Some(vanilla::Library {
+                    downloads: Some(vanilla::LibraryDownloads {
+                        artifact: Some(vanilla::File {
+                            path: Some(
+                                config
+                                    .get_libraries_path()
+                                    .join(&path)
+                                    .to_string_lossy()
+                                    .into_owned(),
+                            ),
+                            sha1: lib.sha1.unwrap_or_default(),
+                            size: lib.size.unwrap_or_default(),
+                            url: format!("{}/{}", url, path),
+                        }),
+                        classifiers: None,
+                    }),
+                    extract: None,
+                    name: lib.name.clone(),
+                    rules: None,
+                    natives: None,
+                    skip_args,
+                });
+            }
+
             if let Some(downloads) = lib.downloads {
                 if let Some(artifact) = downloads.artifact {
                     if let Some(path) = artifact.path {
@@ -392,6 +334,7 @@ fn merge_libraries(
                     }
                 }
             }
+
             None
         })
         .collect()
