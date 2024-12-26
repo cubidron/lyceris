@@ -1,6 +1,9 @@
 use std::env::consts::OS;
 
-use crate::{error::Error, json::version::meta::vanilla::{Action, Name, Rule}};
+use crate::{
+    error::Error,
+    json::version::meta::vanilla::{Action, Arguments, Element, Name, Rule},
+};
 
 use super::TARGET_ARCH;
 
@@ -115,7 +118,10 @@ impl ParseRule for Option<Vec<Rule>> {
 pub fn parse_lib_path(artifact: &str) -> crate::Result<String> {
     let name_items: Vec<&str> = artifact.split(':').collect();
     if name_items.len() < 3 {
-        return Err(Error::Parse(format!("Invalid artifact format: {}", artifact)));
+        return Err(Error::Parse(format!(
+            "Invalid artifact format: {}",
+            artifact
+        )));
     }
 
     let package = name_items[0];
@@ -149,5 +155,15 @@ pub fn parse_lib_path(artifact: &str) -> crate::Result<String> {
             data,
             data_ext
         ))
+    }
+}
+
+pub fn parse_legacy_arguments(legacy_arguments: String, jvm: Option<Vec<Element>>) -> Arguments {
+    Arguments {
+        jvm: jvm.unwrap_or_default(),
+        game: legacy_arguments
+            .split_whitespace()
+            .map(|argument| Element::String(argument.to_string()))
+            .collect(),
     }
 }

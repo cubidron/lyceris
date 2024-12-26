@@ -9,8 +9,11 @@ use uuid::Uuid;
 use crate::{
     auth::AuthMethod,
     error::Error,
-    json::version::meta::vanilla::{Arguments, Element, Value, VersionMeta},
-    minecraft::{config::Memory, parse::ParseRule},
+    json::version::meta::vanilla::{Element, Value, VersionMeta},
+    minecraft::{
+        config::Memory,
+        parse::{parse_legacy_arguments, ParseRule},
+    },
     util::json::read_json,
 };
 
@@ -31,19 +34,14 @@ pub async fn launch<T: Loader>(
     let mut arguments = Vec::<String>::with_capacity(100);
     let meta: VersionMeta = read_json(&config.get_version_json_path()).await?;
 
-    let meta_arguments = meta.arguments.unwrap_or_else(|| Arguments {
-        game: meta
-            .minecraft_arguments
-            .unwrap_or_default()
-            .split_whitespace()
-            .map(|argument| Element::String(argument.to_string()))
-            .collect(),
-        jvm: vec![
+    let meta_arguments = meta.arguments.unwrap_or(parse_legacy_arguments(
+        meta.minecraft_arguments.unwrap_or_default(),
+        Some(vec![
             Element::String("-Djava.library.path=${natives_directory}".to_string()),
             Element::String("-cp".to_string()),
             Element::String("${classpath}".to_string()),
-        ],
-    });
+        ]),
+    ));
 
     let mut variables = HashMap::<&'static str, String>::with_capacity(20);
 
@@ -184,11 +182,15 @@ pub async fn launch<T: Loader>(
 
     let java_path = config.get_java_path(&meta.java_version.unwrap_or_default());
 
+    println!("args: {:?}", arguments);
+
     let mut child = Command::new(java_path)
         .args(arguments)
         .stdout(Stdio::piped())
         .current_dir(&config.game_dir)
         .spawn()?;
+
+
 
     let stdout = child
         .stdout

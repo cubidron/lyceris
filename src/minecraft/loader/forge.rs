@@ -1,10 +1,9 @@
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     env::temp_dir,
     path::MAIN_SEPARATOR_STR,
 };
-
-use serde::{Deserialize, Serialize};
 
 use crate::{
     http::downloader::download,
@@ -34,13 +33,22 @@ struct Mirror {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Installer {
+struct Installer {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<HashMap<String, Data>>,
     pub processors: Option<Vec<Processor>>,
-    pub libraries: Vec<Library>,
+    pub libraries: Option<Vec<Library>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mirror_list: Option<String>,
+    pub file_path: Option<String>,
+    pub path: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyInstaller {
+    install: Installer,
+    version_info: CustomMeta,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -76,72 +84,148 @@ impl Loader for Forge {
             .join("profiles")
             .join(&version_name);
 
+        let is_legacy = self
+            .0
+            .split('.')
+            .filter_map(|n| n.parse::<u32>().ok())
+            .collect::<Vec<_>>()
+            .as_slice()
+            .windows(4)
+            .any(|v| match v {
+                [major, minor, patch, build] => {
+                    *major < 14
+                        || (*major == 14 && *minor < 23)
+                        || (*major == 14 && *minor == 23 && *patch < 5)
+                        || (*major == 14 && *minor == 23 && *patch == 5 && *build < 2851)
+                }
+                _ => false,
+            });
+
+        let version_name = if is_legacy {
+            format!("{}-mc{}", version_name, meta.id.replace(".", ""))
+        } else {
+            version_name.to_string()
+        };
+
         let installer_json_path = profiles_path.join(format!("installer-{}.json", &version_name));
-        let version_json_path = profiles_path.join(format!("version-{}.json", &version_name));
         let installer_path = temp_dir().join(format!("forge-{}.jar", version_name));
 
-        let installer: Installer = if installer_json_path.is_file() {
-            read_json(&installer_json_path).await?
+        if is_legacy {
+            let legacy_installer: LegacyInstaller = if installer_json_path.is_file() {
+                read_json(&installer_json_path).await?
+            } else {
+                download_installer(&installer_path, &version_name, emitter).await?;
+                extract_specific_file(
+                    &installer_path,
+                    "install_profile.json",
+                    &installer_json_path,
+                )
+                .await?;
+                read_json(&installer_json_path).await?
+            };
+
+            let installer = legacy_installer.install;
+            let version = legacy_installer.version_info;
+
+            if let Some(path) = installer.path {
+                if let Some(file_path) = installer.file_path {
+                    let target_path = config.get_libraries_path().join(parse_lib_path(&path)?);
+
+                    if !target_path.is_file() {
+                        extract_specific_file(&installer_path, &file_path, &target_path).await?;
+                    }
+                }
+            }
+
+            meta.libraries.retain(|lib| {
+                version
+                    .libraries
+                    .iter()
+                    .all(|v_lib| v_lib.name.split(':').nth(1) != lib.name.split(':').nth(1))
+            });
+
+            let mut seen = HashSet::new();
+
+            meta.libraries
+                .extend(merge_libraries(config, version.libraries, &mut seen));
+
+            if let Some(ref mut arguments) = meta.minecraft_arguments {
+                if let Some(custom_arguments) = version.minecraft_arguments {
+                    arguments.push_str(&format!(" {}", custom_arguments));
+                }
+            }
+
+            meta.main_class = version.main_class;
         } else {
-            download_installer(&installer_path, &version_name, emitter).await?;
-            extract_specific_file(
+            let version_json_path = profiles_path.join(format!("version-{}.json", &version_name));
+
+            let installer: Installer = if installer_json_path.is_file() {
+                read_json(&installer_json_path).await?
+            } else {
+                download_installer(&installer_path, &version_name, emitter).await?;
+                extract_specific_file(
+                    &installer_path,
+                    "install_profile.json",
+                    &installer_json_path,
+                )
+                .await?;
+                read_json(&installer_json_path).await?
+            };
+
+            let version: CustomMeta = if version_json_path.is_file() {
+                read_json(&version_json_path).await?
+            } else {
+                download_installer(&installer_path, &version_name, emitter).await?;
+                extract_specific_file(&installer_path, "version.json", &version_json_path).await?;
+                read_json(&version_json_path).await?
+            };
+
+            meta.processors = installer.processors;
+            meta.data = Some(merge_data(
+                config,
+                &meta,
+                installer.data.unwrap_or_default(),
+            ));
+
+            process_data(config, &installer_path, &mut meta.data).await?;
+
+            extract_specific_directory(
                 &installer_path,
-                "install_profile.json",
-                &installer_json_path,
+                "maven/",
+                &config.game_dir.join("libraries"),
             )
-            .await?;
-            read_json(&installer_json_path).await?
-        };
+            .await
+            .ok();
 
-        let version: CustomMeta = if version_json_path.is_file() {
-            read_json(&version_json_path).await?
-        } else {
-            download_installer(&installer_path, &version_name, emitter).await?;
-            extract_specific_file(&installer_path, "version.json", &version_json_path).await?;
-            read_json(&version_json_path).await?
-        };
+            meta.libraries.retain(|lib| {
+                version
+                    .libraries
+                    .iter()
+                    .all(|v_lib| v_lib.name.split(':').nth(1) != lib.name.split(':').nth(1))
+            });
 
-        meta.processors = installer.processors;
-        meta.data = Some(merge_data(
-            config,
-            &meta,
-            installer.data.unwrap_or_default(),
-        ));
+            let mut seen = HashSet::new();
 
-        process_data(config, &installer_path, &mut meta.data).await?;
-
-        extract_specific_directory(
-            &installer_path,
-            "maven/",
-            &config.game_dir.join("libraries"),
-        )
-        .await
-        .ok();
-
-        meta.libraries.retain(|lib| {
-            version
-                .libraries
-                .iter()
-                .all(|v_lib| v_lib.name.split(':').nth(1) != lib.name.split(':').nth(1))
-        });
-
-        let mut seen = HashSet::new();
-
-        meta.libraries
-            .extend(merge_libraries(config, version.libraries, &mut seen));
-        meta.libraries
-            .extend(merge_libraries(config, installer.libraries, &mut seen));
-
-        if let Some(ref mut arguments) = meta.arguments {
-            if let Some(jvm) = version.arguments.jvm {
-                arguments.jvm.extend(jvm);
+            meta.libraries
+                .extend(merge_libraries(config, version.libraries, &mut seen));
+            if let Some(libraries) = installer.libraries {
+                meta.libraries
+                    .extend(merge_libraries(config, libraries, &mut seen));
             }
-            if let Some(game) = version.arguments.game {
-                arguments.game.extend(game);
+
+            if let Some(ref mut arguments) = meta.arguments {
+                if let Some(custom_arguments) = version.arguments {
+                    if let Some(jvm) = custom_arguments.jvm {
+                        arguments.jvm.extend(jvm);
+                    }
+                    if let Some(game) = custom_arguments.game {
+                        arguments.game.extend(game);
+                    }
+                }
             }
+
+            meta.main_class = version.main_class;
         }
-
-        meta.main_class = version.main_class;
 
         Ok(meta)
     }
