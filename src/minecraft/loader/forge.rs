@@ -79,7 +79,7 @@ impl Loader for Forge {
         let version_json_path = profiles_path.join(format!("version-{}.json", &version_name));
         let installer_path = temp_dir().join(format!("forge-{}.jar", version_name));
 
-        let installer: Installer = if installer_json_path.is_file() {
+        let mut installer: Installer = if installer_json_path.is_file() {
             read_json(&installer_json_path).await?
         } else {
             download_installer(&installer_path, &version_name, emitter).await?;
@@ -100,23 +100,15 @@ impl Loader for Forge {
             read_json(&version_json_path).await?
         };
 
-        meta.processors = installer.processors;
-
-        process_data(config, &installer_path, &mut meta.data).await?;
-
-        meta.data = Some(merge_data(
-            config,
-            &meta,
-            installer.data.unwrap_or_default(),
-        ));
-        meta.processors = installer.processors;
+        process_data(config, &installer_path, &mut installer.data).await?;
+        
         meta.data = Some(merge_data(
             config,
             &meta,
             installer.data.unwrap_or_default(),
         ));
 
-        process_data(config, &installer_path, &mut meta.data).await?;
+        meta.processors = installer.processors;
 
         extract_specific_directory(
             &installer_path,
@@ -238,7 +230,6 @@ async fn process_data(
                 let file = file_path.split('/').last().ok_or(crate::Error::NotFound(
                     "File not found for the processor".to_string(),
                 ))?;
-                println!("{}", file);
                 let file_name = file.split('.').next().ok_or(crate::Error::NotFound(
                     "File name not found for the processor".to_string(),
                 ))?;
