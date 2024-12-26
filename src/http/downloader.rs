@@ -53,6 +53,7 @@ pub async fn download<P: AsRef<Path>>(
     emitter: Option<&Emitter>,
 ) -> crate::Result<u64> {
     // Send a get request to the given url.
+    println!("Downloading file: {:?}", &url.as_str());
     let response = Client::builder().build()?.get(url).send().await?;
 
     if !response.status().is_success() {

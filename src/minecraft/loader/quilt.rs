@@ -1,7 +1,4 @@
-use std::path::Path;
-
-use serde::{Deserialize, Serialize};
-
+use super::Loader;
 use crate::{
     error::Error,
     http::fetch::fetch,
@@ -9,62 +6,56 @@ use crate::{
         custom::CustomMeta,
         vanilla::{self, VersionMeta},
     },
+    minecraft::{config::Config, emitter::Emitter, parse::parse_lib_path},
 };
-
-use super::Loader;
+use serde::{Deserialize, Serialize};
 
 const VERSION_META_ENDPOINT: &str = "https://meta.quiltmc.org/v3/";
 
 #[derive(Serialize, Deserialize)]
 struct QuiltLoader {
-    #[serde(rename = "separator")]
-    pub separator: Separator,
-
-    #[serde(rename = "build")]
-    pub build: i64,
-
-    #[serde(rename = "maven")]
-    pub maven: String,
-
-    #[serde(rename = "version")]
-    pub version: String,
+    separator: Separator,
+    build: i64,
+    maven: String,
+    version: String,
 }
 
 #[derive(Serialize, Deserialize)]
 enum Separator {
     #[serde(rename = "+build.")]
     Build,
-
     #[serde(rename = ".")]
     Empty,
 }
 
 #[derive(Serialize, Deserialize)]
 struct Version {
-    #[serde(rename = "version")]
-    pub version: String,
-
-    #[serde(rename = "stable")]
-    pub stable: bool,
+    version: String,
+    stable: bool,
 }
 
 pub struct Quilt(pub String);
 
 impl Loader for Quilt {
-    async fn merge(&self, game_dir: &Path, mut meta: VersionMeta) -> crate::Result<VersionMeta> {
+    async fn merge<T: Loader>(
+        &self,
+        _config: &Config<T>,
+        mut meta: VersionMeta,
+        _: Option<&Emitter>,
+    ) -> crate::Result<VersionMeta> {
         let loaders: Vec<QuiltLoader> =
-            fetch(format!("{}{}", VERSION_META_ENDPOINT, "versions/loader")).await?;
+            fetch(format!("{}versions/loader", VERSION_META_ENDPOINT)).await?;
         let versions: Vec<Version> =
-            fetch(format!("{}{}", VERSION_META_ENDPOINT, "versions/game")).await?;
+            fetch(format!("{}versions/game", VERSION_META_ENDPOINT)).await?;
 
         let loader = loaders
             .into_iter()
             .find(|v| v.version == self.0)
-            .ok_or(Error::UnknownVersion("Quilt Loader".into()))?;
+            .ok_or_else(|| Error::UnknownVersion("Quilt Loader".into()))?;
         let fabric = versions
             .into_iter()
             .find(|v| v.version == meta.id)
-            .ok_or(Error::UnknownVersion("Quilt".into()))?;
+            .ok_or_else(|| Error::UnknownVersion("Quilt".into()))?;
 
         let version: CustomMeta = fetch(format!(
             "{}versions/loader/{}/{}/profile/json",
@@ -83,31 +74,15 @@ impl Loader for Quilt {
             version
                 .libraries
                 .into_iter()
-                .map(|lib| {
-                    let parts = lib.name.split(':').collect::<Vec<_>>();
-                    let file_name = format!("{}-{}.jar", parts[1], parts[2]);
-                    let path = game_dir
-                        .join("libraries")
-                        .join(parts[0].replace('.', std::path::MAIN_SEPARATOR_STR))
-                        .join(parts[1])
-                        .join(parts[2])
-                        .join(&file_name);
-                    let url = format!(
-                        "{}{}/{}/{}/{}",
-                        lib.url,
-                        parts[0].replace('.', "/"),
-                        parts[1],
-                        parts[2],
-                        file_name
-                    );
-
-                    vanilla::Library {
+                .filter_map(|lib| {
+                    let path = parse_lib_path(&lib.name).ok()?;
+                    lib.url.map(|url| vanilla::Library {
                         downloads: Some(vanilla::LibraryDownloads {
                             artifact: Some(vanilla::File {
-                                path: Some(path.to_string_lossy().into_owned()),
+                                path: Some(path.clone()),
                                 sha1: lib.sha1.unwrap_or_default(),
                                 size: lib.size.unwrap_or_default(),
-                                url,
+                                url: format!("{}/{}", url, path),
                             }),
                             classifiers: None,
                         }),
@@ -115,7 +90,8 @@ impl Loader for Quilt {
                         name: lib.name.clone(),
                         rules: None,
                         natives: None,
-                    }
+                        skip_args: false,
+                    })
                 })
                 .collect::<Vec<_>>(),
         );
@@ -124,11 +100,17 @@ impl Loader for Quilt {
             if let Some(jvm) = version.arguments.jvm {
                 arguments.jvm.extend(jvm);
             }
-            arguments.game.extend(version.arguments.game);
+            if let Some(game) = version.arguments.game {
+                arguments.game.extend(game);
+            }
         }
 
         meta.main_class = version.main_class;
 
         Ok(meta)
+    }
+
+    fn get_version(&self) -> String {
+        self.0.clone()
     }
 }

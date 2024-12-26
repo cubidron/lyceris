@@ -1,6 +1,6 @@
 use std::env::consts::OS;
 
-use crate::json::version::meta::vanilla::{Action, Name, Rule};
+use crate::{error::Error, json::version::meta::vanilla::{Action, Name, Rule}};
 
 use super::TARGET_ARCH;
 
@@ -109,5 +109,45 @@ impl ParseRule for Option<Vec<Rule>> {
             }
             None => true,
         }
+    }
+}
+
+pub fn parse_lib_path(artifact: &str) -> crate::Result<String> {
+    let name_items: Vec<&str> = artifact.split(':').collect();
+    if name_items.len() < 3 {
+        return Err(Error::Parse(format!("Invalid artifact format: {}", artifact)));
+    }
+
+    let package = name_items[0];
+    let name = name_items[1];
+    let version_ext: Vec<&str> = name_items[2].split('@').collect();
+    let version = version_ext[0];
+    let ext = version_ext.get(1).unwrap_or(&"jar");
+
+    if name_items.len() == 3 {
+        Ok(format!(
+            "{}/{}/{}/{}-{}.{}",
+            package.replace('.', "/"),
+            name,
+            version,
+            name,
+            version,
+            ext
+        ))
+    } else {
+        let data_ext: Vec<&str> = name_items[3].split('@').collect();
+        let data = data_ext[0];
+        let data_ext = data_ext.get(1).unwrap_or(&"jar");
+
+        Ok(format!(
+            "{}/{}/{}/{}-{}-{}.{}",
+            package.replace('.', "/"),
+            name,
+            version,
+            name,
+            version,
+            data,
+            data_ext
+        ))
     }
 }

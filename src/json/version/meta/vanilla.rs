@@ -1,4 +1,8 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
+
+use crate::minecraft::loader::forge::{Data, Processor};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +28,10 @@ pub struct VersionMeta {
     pub release_time: String,
     pub time: String,
     pub r#type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub processors: Option<Vec<Processor>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<HashMap<String, Data>>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -99,7 +107,7 @@ pub struct Downloads {
     pub server_mappings: Option<File>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct File {
     pub sha1: String,
     pub size: i64,
@@ -107,11 +115,16 @@ pub struct File {
     pub path: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct JavaVersion {
+    #[serde(default = "default_java_version")]
     pub component: String,
     pub major_version: i64,
+}
+
+fn default_java_version() -> String {
+    "jre-legacy".to_string()
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -124,6 +137,8 @@ pub struct Library {
     pub extract: Option<Extract>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub natives: Option<Natives>,
+    #[serde(default)]
+    pub skip_args: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -142,7 +157,7 @@ pub struct Natives {
     pub windows: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LibraryDownloads {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifact: Option<File>,
@@ -178,7 +193,7 @@ pub enum Value {
     Multiple(Vec<String>),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Classifiers {
     #[serde(rename = "natives-linux")]
     #[serde(skip_serializing_if = "Option::is_none")]
