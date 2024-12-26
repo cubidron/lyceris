@@ -5,6 +5,7 @@ use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, Command},
 };
+use uuid::Uuid;
 
 use crate::{
     auth::AuthMethod,
@@ -68,9 +69,10 @@ pub async fn launch<T: Loader>(
             insert_var("${user_type}", "msa".to_string());
         }
         AuthMethod::Offline { username, uuid } => {
-            insert_var("${auth_player_name}", username.clone());
+            let uuid = uuid.clone().unwrap_or(Uuid::new_v4().to_string());
+            insert_var("${auth_player_name}", username.to_string());
             insert_var("${auth_xuid}", uuid.clone());
-            insert_var("${auth_uuid}", uuid.clone());
+            insert_var("${auth_uuid}", uuid);
             insert_var("${auth_access_token}", "token".to_string());
             insert_var("${user_type}", "mojang".to_string());
         }
@@ -107,7 +109,7 @@ pub async fn launch<T: Loader>(
         "${natives_directory}",
         config
             .get_natives_path()
-            .join(&config.version)
+            .join(config.version)
             .to_string_lossy()
             .into_owned(),
     );
@@ -183,9 +185,6 @@ pub async fn launch<T: Loader>(
     });
 
     let java_path = config.get_java_path(&meta.java_version.unwrap_or_default());
-
-    println!("Using java version: {:?}", java_path);
-    println!("{:?}", arguments);
 
     let mut child = Command::new(java_path)
         .args(arguments)

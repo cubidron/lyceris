@@ -34,14 +34,14 @@ struct Version {
     stable: bool,
 }
 
-pub struct Quilt(pub String);
+pub struct Quilt(pub &'static str);
 
 impl Loader for Quilt {
     async fn merge<T: Loader>(
         &self,
         _config: &Config<T>,
         mut meta: VersionMeta,
-        _: Option<&Emitter>,
+        _emitter: Option<&Emitter>,
     ) -> crate::Result<VersionMeta> {
         let loaders: Vec<QuiltLoader> =
             fetch(format!("{}versions/loader", VERSION_META_ENDPOINT)).await?;
@@ -111,6 +111,6 @@ impl Loader for Quilt {
     }
 
     fn get_version(&self) -> String {
-        self.0.clone()
+        self.0.to_string()
     }
 }

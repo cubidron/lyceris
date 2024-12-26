@@ -23,8 +23,7 @@ use crate::{
         },
     },
     minecraft::{
-        CLASSPATH_SEPARATOR, JAVA_MANIFEST_ENDPOINT, RESOURCES_ENDPOINT,
-        VERSION_MANIFEST_ENDPOINT,
+        CLASSPATH_SEPARATOR, JAVA_MANIFEST_ENDPOINT, RESOURCES_ENDPOINT, VERSION_MANIFEST_ENDPOINT,
     },
     util::{
         extract::{extract_file, read_file_from_jar},
@@ -33,7 +32,12 @@ use crate::{
     },
 };
 
-use super::{config::Config, emitter::Emitter, loader::Loader, parse::{parse_lib_path, ParseRule}};
+use super::{
+    config::Config,
+    emitter::Emitter,
+    loader::Loader,
+    parse::{parse_lib_path, ParseRule},
+};
 
 #[derive(Clone)]
 enum FileType {
@@ -58,7 +62,7 @@ pub async fn install<T: Loader>(
     let manifest: VersionManifest = fetch(VERSION_MANIFEST_ENDPOINT).await?;
     let version_json_path = config.get_version_json_path();
     let mut meta: VersionMeta = if !version_json_path.exists() {
-        let mut meta = fetch_version_meta(&manifest, &config.version).await?;
+        let mut meta = fetch_version_meta(&manifest, config.version).await?;
         if let Some(loader) = &config.loader {
             meta = loader.merge(config, meta, emitter).await?;
         }
@@ -86,7 +90,7 @@ pub async fn install<T: Loader>(
         download(&meta.downloads.client.url, version_jar_path, emitter).await?;
     }
 
-    let natives_path = config.get_natives_path().join(&config.version);
+    let natives_path = config.get_natives_path().join(config.version);
     if !natives_path.is_dir() {
         create_dir_all(&natives_path).await?;
     }
@@ -331,8 +335,6 @@ async fn execute_processors_if_exists(
                 .collect::<Vec<String>>()
                 .join(CLASSPATH_SEPARATOR);
 
-            println!("{}", classpath);
-
             let main_class = read_file_from_jar(
                 &libraries_path
                     .join(parse_lib_path(&processor.jar)?)
@@ -349,8 +351,6 @@ async fn execute_processors_if_exists(
             .ok_or_else(|| Error::NotFound("Main-Class of processor".to_string()))?
             .trim()
             .to_string();
-
-            println!("{}", main_class);
 
             let args = processor
                 .args
@@ -373,15 +373,16 @@ async fn execute_processors_if_exists(
                         }
                     } else if arg.starts_with('[') {
                         if let Ok(parsed_path) = parse_lib_path(trimmed_arg) {
-                            return libraries_path.join(parsed_path).to_string_lossy().into_owned();
+                            return libraries_path
+                                .join(parsed_path)
+                                .to_string_lossy()
+                                .into_owned();
                         }
                     }
 
                     arg.clone()
                 })
                 .collect::<Vec<_>>();
-
-            println!("{:?}", args);
 
             let child = Command::new(
                 config.get_java_path(
@@ -435,7 +436,6 @@ async fn download_necessary(
             if !file.path.exists()
                 || (!file.sha1.is_empty() && calculate_sha1(&file.path).ok()? != file.sha1)
             {
-                println!("File broken: {}", file.path.display());
                 return Some((file.url.clone(), file.path.clone()));
             }
             None

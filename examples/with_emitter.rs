@@ -1,0 +1,66 @@
+use std::env;
+
+use lyceris::minecraft::{
+    config::ConfigBuilder, emitter::Emitter, install::install, launch::launch,
+};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Emitter uses `EventEmitter` inside of it
+    // and it uses tokio::Mutex for locking.
+    // That causes emitter methods to be async.
+    let emitter = Emitter::default();
+
+    // Single download progress event send when
+    // a file is being downloaded.
+    emitter
+        .on(
+            "single_download_progress",
+            |(path, current, total): (String, u64, u64)| {
+                println!("Downloading {} - {}/{}", path, current, total);
+            },
+        )
+        .await;
+
+    // Multiple download progress event send when
+    // multiple files are being downloaded.
+    // Java, libraries and assets are downloaded in parallel and
+    // this event is triggered for each file.
+    emitter
+        .on(
+            "multiple_download_progress",
+            |(current, total): (u64, u64)| {
+                println!("Downloading {}/{}", current, total);
+            },
+        )
+        .await;
+
+    // Console event send when a line is printed to the console.
+    // It uses a seperated tokio thread to handle this operation.
+    emitter
+        .on("console", |line: String| {
+            println!("Line: {}", line);
+        })
+        .await;
+
+    let current_dir = env::current_dir()?;
+    let config = ConfigBuilder::new(
+        current_dir.join("game"),
+        "1.21.4",
+        lyceris::auth::AuthMethod::Offline {
+            username: "Lyceris",
+            // If none given, it will be generated.
+            uuid: None,
+        },
+    )
+    .build();
+
+    // Install method also checks for broken files
+    // and downloads them again if they are broken.
+    install(&config, Some(&emitter)).await?;
+
+    // This method never downloads any file and just runs the game.
+    launch(&config, Some(&emitter)).await?.wait().await?;
+
+    Ok(())
+}

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::{auth::AuthMethod, json::version::meta::vanilla::JavaVersion};
 
@@ -11,34 +11,38 @@ pub enum Memory {
 
 pub struct Config<T: Loader> {
     pub game_dir: PathBuf,
-    pub version: String,
+    pub version: &'static str,
     pub authentication: AuthMethod,
     pub memory: Option<Memory>,
-    pub version_name: Option<String>,
+    pub version_name: Option<&'static str>,
     pub loader: Option<T>,
-    pub java_version: Option<String>,
+    pub java_version: Option<&'static str>,
     pub runtime_dir: Option<PathBuf>,
     pub custom_java_args: Vec<String>,
     pub custom_args: Vec<String>,
 }
 
-pub struct ConfigBuilder<T: Loader> {
+pub struct ConfigBuilder<T: Loader = ()> {
     game_dir: PathBuf,
-    version: String,
+    version: &'static str,
     authentication: AuthMethod,
     memory: Option<Memory>,
-    version_name: Option<String>,
+    version_name: Option<&'static str>,
     loader: Option<T>,
-    java_version: Option<String>,
+    java_version: Option<&'static str>,
     runtime_dir: Option<PathBuf>,
     custom_java_args: Vec<String>,
     custom_args: Vec<String>,
 }
 
-impl<T: Loader> ConfigBuilder<T> {
-    pub fn new(game_dir: PathBuf, version: String, authentication: AuthMethod) -> Self {
-        Self {
-            game_dir,
+impl ConfigBuilder<()> {
+    pub fn new<T: AsRef<Path>>(
+        game_dir: T,
+        version: &'static str,
+        authentication: AuthMethod,
+    ) -> ConfigBuilder<()> {
+        ConfigBuilder {
+            game_dir: game_dir.as_ref().to_path_buf(),
             version,
             authentication,
             memory: None,
@@ -50,23 +54,35 @@ impl<T: Loader> ConfigBuilder<T> {
             custom_args: Vec::new(),
         }
     }
+}
 
+impl<T: Loader> ConfigBuilder<T> {
     pub fn memory(mut self, memory: Memory) -> Self {
         self.memory = Some(memory);
         self
     }
 
-    pub fn version_name(mut self, version_name: String) -> Self {
+    pub fn version_name(mut self, version_name: &'static str) -> Self {
         self.version_name = Some(version_name);
         self
     }
 
-    pub fn loader(mut self, loader: T) -> Self {
-        self.loader = Some(loader);
-        self
+    pub fn loader<C: Loader>(self, loader: C) -> ConfigBuilder<C> {
+        ConfigBuilder {
+            game_dir: self.game_dir,
+            version: self.version,
+            authentication: self.authentication,
+            memory: self.memory,
+            version_name: self.version_name,
+            loader: Some(loader),
+            java_version: self.java_version,
+            runtime_dir: self.runtime_dir,
+            custom_java_args: self.custom_java_args,
+            custom_args: self.custom_args,
+        }
     }
 
-    pub fn java_version(mut self, java_version: String) -> Self {
+    pub fn java_version(mut self, java_version: &'static str) -> Self {
         self.java_version = Some(java_version);
         self
     }
@@ -103,7 +119,7 @@ impl<T: Loader> ConfigBuilder<T> {
 }
 
 impl<T: Loader> Config<T> {
-    pub fn new(game_dir: PathBuf, version: String, authentication: AuthMethod) -> Self {
+    pub fn new(game_dir: PathBuf, version: &'static str, authentication: AuthMethod) -> Self {
         Self {
             game_dir,
             version,
@@ -119,12 +135,14 @@ impl<T: Loader> Config<T> {
     }
 
     pub fn get_version_name(&self) -> String {
-        self.version_name.clone().unwrap_or_else(|| {
-            self.loader
-                .as_ref()
-                .map(|loader| format!("{}-{}", self.version, loader.get_version()))
-                .unwrap_or_else(|| self.version.clone())
-        })
+        self.version_name
+            .map(|name| name.to_owned())
+            .or_else(|| {
+                self.loader
+                    .as_ref()
+                    .map(|loader| format!("{}-{}", self.version, loader.get_version()))
+            })
+            .unwrap_or_else(|| self.version.to_string())
     }
 
     pub fn get_libraries_path(&self) -> PathBuf {

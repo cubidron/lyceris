@@ -9,7 +9,7 @@ pub enum AuthMethod {
         username: String
     },
     Offline {
-        username: String,
-        uuid: String
+        username: &'static str,
+        uuid: Option<String>
     }
 }

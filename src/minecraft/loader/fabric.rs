@@ -35,14 +35,14 @@ struct Version {
     stable: bool,
 }
 
-pub struct Fabric(pub String);
+pub struct Fabric(pub &'static str);
 
 impl Loader for Fabric {
     async fn merge<T: Loader>(
         &self,
         _config: &Config<T>,
         mut meta: VersionMeta,
-        _: Option<&Emitter>,
+        _emitter: Option<&Emitter>,
     ) -> crate::Result<VersionMeta> {
         let loaders: Vec<FabricLoader> =
             fetch(format!("{}versions/loader", VERSION_META_ENDPOINT)).await?;
@@ -112,6 +112,6 @@ impl Loader for Fabric {
     }
 
     fn get_version(&self) -> String {
-        self.0.clone()
+        self.0.to_string()
     }
 }

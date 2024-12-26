@@ -60,7 +60,7 @@ pub struct Data {
     pub server: String,
 }
 
-pub struct Forge(pub String);
+pub struct Forge(pub &'static str);
 
 impl Loader for Forge {
     async fn merge<T: Loader>(
@@ -147,7 +147,7 @@ impl Loader for Forge {
     }
 
     fn get_version(&self) -> String {
-        self.0.clone()
+        self.0.to_string()
     }
 }
 
