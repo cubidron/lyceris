@@ -18,6 +18,13 @@ An open source Minecraft launcher library written in Rust.
 ![Product Screenshot](https://i.imgur.com/uQ13xHc.png)
 
 Lyceris is written with functional programming paradigm to achieve simplicity. It supports Microsoft authentication, loaders like Fabric, Quilt (more will be implemented soon), multi-threaded control system and download parallelism. It also automatically downloads necessary Java version. Library name comes from a character from Sword Art Online anime.
+
+## Supported Mod Loaders
+- [X] Forge (Above version 1.12.2)
+- [X] Fabric
+- [X] Quilt
+Versions below 1.12.2 is not supported and won't be supported in the future.
+
 ## Getting Started
 
 ```sh
@@ -29,57 +36,76 @@ cargo add lyceris
 This is the example implementation with using Quilt mod loader in version 1.20.
 Don't forget to change the game directory path!
 ```rust
-  async fn launch() {
-    let config = Config {
-        game_dir: "Path to the game directory".into(),
-        version: "1.20".to_string(),
-        authentication: auth::AuthMethod::Offline {
-            username: "Notch".to_string(),
-            uuid: "4c4ae28c-16c8-49f4-92a6-8d21e0d8b4a0".to_string(),
+use std::env;
+
+use lyceris::minecraft::{
+    config::ConfigBuilder, emitter::Emitter, install::install, launch::launch,
+};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Emitter uses `EventEmitter` inside of it
+    // and it uses tokio::Mutex for locking.
+    // That causes emitter methods to be async.
+    let emitter = Emitter::default();
+
+    // Single download progress event send when
+    // a file is being downloaded.
+    emitter
+        .on(
+            "single_download_progress",
+            |(path, current, total): (String, u64, u64)| {
+                println!("Downloading {} - {}/{}", path, current, total);
+            },
+        )
+        .await;
+
+    // Multiple download progress event send when
+    // multiple files are being downloaded.
+    // Java, libraries and assets are downloaded in parallel and
+    // this event is triggered for each file.
+    emitter
+        .on(
+            "multiple_download_progress",
+            |(current, total): (u64, u64)| {
+                println!("Downloading {}/{}", current, total);
+            },
+        )
+        .await;
+
+    // Console event send when a line is printed to the console.
+    // It uses a seperated tokio thread to handle this operation.
+    emitter
+        .on("console", |line: String| {
+            println!("Line: {}", line);
+        })
+        .await;
+
+    let current_dir = env::current_dir()?;
+    let config = ConfigBuilder::new(
+        current_dir.join("game"),
+        "1.21.4",
+        lyceris::auth::AuthMethod::Offline {
+            username: "Lyceris",
+            // If none given, it will be generated.
+            uuid: None,
         },
-        memory: None,
-        java_version: None,
-        version_name: None,
-        loader: Some(Quilt("0.27.1".into())),
-        runtime_dir: None,
-        custom_args: vec![],
-        custom_java_args: vec![],
-    };
+    )
+    .build();
 
-    let mut emitter = EventEmitter::new();
-
-    // Handling single download progression
-    emitter.on("single_download_progress", |(path, current, max): (String, u64, u64)| {
-        println!("{}-{}/{}", path, current, max);
-    });
-
-    // Handling multi download progression
-    emitter.on(
-        "multiple_download_progress",
-        |(path, current, max): (String, u64, u64)| {
-            println!("{}-{}/{}", path, current, max);
-        },
-    );
-
-    // Handling console outputs
-    emitter.on("console", |line: String| {
-        println!("Line: {}", line);
-    });
-
-    let emitter = Arc::new(Mutex::new(emitter));
-
+    // Install method also checks for broken files
+    // and downloads them again if they are broken.
     install(&config, Some(&emitter)).await?;
 
-    let child = launch(&config, Some(emitter)).await?;
+    // This method never downloads any file and just runs the game.
+    launch(&config, Some(&emitter)).await?.wait().await?;
 
-    child.wait().await?;
+    Ok(())
+}
 
-  }
 ```
 ## Roadmap
-
-- [X] Microsoft Authentication
-- [ ] Forge mod loader support
+- [ ] Download resumption
 
 See the [open issues](https://github.com/cubidron/lyceris/issues) for a full list of proposed features (and known issues).
 ## License
