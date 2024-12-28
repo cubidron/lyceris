@@ -28,7 +28,7 @@ mod tests {
             current_dir.join("target").join("game"),
             "1.16.5",
             AuthMethod::Offline {
-                username: "Miate",
+                username: "Miate".to_string(),
                 uuid: None,
             },
         )

@@ -48,7 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         current_dir.join("game"),
         "1.21.4",
         lyceris::auth::AuthMethod::Offline {
-            username: "Lyceris",
+            username: "Lyceris".to_string(),
             // If none given, it will be generated.
             uuid: None,
         },
