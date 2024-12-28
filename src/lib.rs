@@ -32,7 +32,6 @@ mod tests {
                 uuid: None,
             },
         )
-        .loader(Forge("36.2.42"))
         .build();
 
         let emitter = Emitter::default();

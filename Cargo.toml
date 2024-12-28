@@ -30,5 +30,7 @@ serde_json = "1.0.134"
 sha1 = "0.10.6"
 thiserror = "2.0.9"
 tokio = { version = "1.42.0", features = ["full"] }
-zip = "2.2.1"
 uuid = { version = "1.11.0", features = ["v4", "fast-rng"] }
+async_zip = { version = "0.0.17", features = ["tokio", "tokio-fs"] }
+tokio-util = { version = "0.7.13", features = ["compat"] }
+futures-lite = "2.5.0"

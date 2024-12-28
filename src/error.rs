@@ -23,11 +23,13 @@ pub enum Error {
     #[error("Unsupported architecture")]
     UnsupportedArchitecture,
     #[error(transparent)]
+    TokioJoin(#[from] tokio::task::JoinError),
+    #[error(transparent)]
     IO(#[from] tokio::io::Error),
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
-    Zip(#[from] zip::result::ZipError),
+    Zip(#[from] async_zip::error::ZipError),
     #[error(transparent)]
     Base64(#[from] base64::DecodeError),
     #[error(transparent)]

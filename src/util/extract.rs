@@ -1,126 +1,202 @@
-use std::{fs::File, io::Read, path::Path};
-use tokio::{fs::create_dir_all, io::AsyncWriteExt};
-use zip::read::ZipArchive;
+use std::{
+    env::current_dir,
+    path::{Path, PathBuf},
+};
 
-pub async fn extract_file<P: AsRef<Path>>(zip_path: &P, output_dir: &P) -> crate::Result<()> {
-    // Open the ZIP file synchronously
-    let file = File::open(zip_path)?;
-    let mut archive = ZipArchive::new(file)?;
+use async_zip::base::read::seek::ZipFileReader;
+use futures::AsyncReadExt;
+use tokio::{
+    fs::{create_dir_all, File, OpenOptions},
+    io::BufReader,
+};
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-    tokio::fs::create_dir_all(&output_dir).await?;
+use crate::error::Error;
 
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let output_path = output_dir.as_ref().join(file.name());
+pub async fn extract_file(archive: &PathBuf, out_dir: &Path) -> crate::Result<()> {
+    let archive = File::open(archive).await?;
+    let archive = BufReader::new(archive).compat();
+    let mut reader = ZipFileReader::new(archive).await?;
+    for index in 0..reader.file().entries().len() {
+        let entry = reader
+            .file()
+            .entries()
+            .get(index)
+            .ok_or(Error::NotFound("Entry not found".to_string()))?;
+        let path = out_dir.join(entry.filename().as_str()?);
+        let entry_is_dir = entry.dir()?;
 
-        if file.name().ends_with('/') {
-            tokio::fs::create_dir_all(&output_path).await?;
+        let mut entry_reader = reader.reader_without_entry(index).await?;
+
+        if entry_is_dir {
+            // The directory may have been created if iteration is out of order.
+            if !path.exists() {
+                create_dir_all(&path).await?;
+            }
         } else {
-            let mut output_file = tokio::fs::File::create(&output_path).await?;
-            let mut buffer = Vec::new();
-            file.read_to_end(&mut buffer)?;
-            output_file.write_all(&buffer).await?;
+            // Creates parent directories. They may not exist if iteration is out of order
+            // or the archive does not contain directory entries.
+            let parent = path
+                .parent()
+                .ok_or(Error::NotFound("Parent not found".to_string()))?;
+            if !parent.is_dir() {
+                create_dir_all(parent).await?;
+            }
+            let writer = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .await?;
+            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+
+            // Closes the file and manipulates its metadata here if you wish to preserve its metadata from the archive.
         }
     }
 
     Ok(())
 }
 
-pub async fn extract_specific_file<P: AsRef<Path>>(
-    zip_path: &P,
-    file_name: &str,
-    output_file: &P,
+pub async fn extract_specific_file(
+    archive: &PathBuf,
+    target_filename: &str,
+    out_dir: &Path,
 ) -> crate::Result<()> {
-    let file = File::open(zip_path)?;
-    let mut archive = ZipArchive::new(file)?;
+    let archive = File::open(archive).await?;
+    let archive = BufReader::new(archive).compat();
+    let mut reader = ZipFileReader::new(archive).await?;
 
-    if let Some(parent) = &output_file.as_ref().parent() {
-        create_dir_all(parent).await?;
-    }
+    // Iterate through the entries in the ZIP file
+    for index in 0..reader.file().entries().len() {
+        let entry = reader
+            .file()
+            .entries()
+            .get(index)
+            .ok_or(Error::NotFound("Entry not found".to_string()))?;
 
-    let mut file_found = false;
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        if file.name() == file_name {
-            file_found = true;
+        // Check if the current entry matches the target filename
+        if entry.filename().as_str().unwrap() == target_filename {
+            let path = out_dir.join(entry.filename().as_str()?);
+            let entry_is_dir = entry.dir()?;
 
-            let mut output_file = tokio::fs::File::create(&output_file).await?;
-            let mut buffer = Vec::new();
-            file.read_to_end(&mut buffer)?;
-            output_file.write_all(&buffer).await?;
-            break;
-        }
-    }
+            let mut entry_reader = reader.reader_without_entry(index).await?;
 
-    if !file_found {
-        return Err(crate::Error::NotFound(format!(
-            "File '{}' in the ZIP archive",
-            file_name
-        )));
-    }
-
-    Ok(())
-}
-pub async fn extract_specific_directory<P: AsRef<Path>>(
-    zip_path: &P,
-    dir_name: &str,
-    output_dir: &P,
-) -> crate::Result<()> {
-    let file = File::open(zip_path)?;
-    let mut archive = ZipArchive::new(file)?;
-
-    tokio::fs::create_dir_all(&output_dir).await?;
-
-    let mut dir_found = false;
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        if file.name().starts_with(dir_name) {
-            dir_found = true;
-            let relative_path = file.name().strip_prefix(dir_name).unwrap_or(file.name());
-            let output_path = output_dir.as_ref().join(relative_path);
-
-            if file.name().ends_with('/') {
-                tokio::fs::create_dir_all(&output_path).await?;
-            } else {
-                if let Some(parent) = output_path.parent() {
-                    tokio::fs::create_dir_all(parent).await?;
+            if entry_is_dir {
+                // If the entry is a directory, create it if it doesn't exist
+                if !path.exists() {
+                    create_dir_all(&path).await?;
                 }
-                let mut output_file = tokio::fs::File::create(&output_path).await?;
-                let mut buffer = Vec::new();
-                file.read_to_end(&mut buffer)?;
-                output_file.write_all(&buffer).await?;
+            } else {
+                // Create parent directories if they don't exist
+                let parent = path
+                    .parent()
+                    .ok_or(Error::NotFound("Parent not found".to_string()))?;
+                if !parent.is_dir() {
+                    create_dir_all(parent).await?;
+                }
+
+                // Open the file for writing
+                let writer = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)
+                    .await?;
+
+                // Copy the contents of the entry to the file
+                futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+
+                // Optionally, manipulate the file's metadata here if needed
+            }
+            return Ok(()); // Exit after extracting the target file
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn read_file_from_jar(
+    archive: &PathBuf,
+    target_filename: &str,
+) -> crate::Result<String> {
+    let archive = File::open(archive).await?;
+    let archive = BufReader::new(archive).compat();
+    let mut reader = ZipFileReader::new(archive).await?;
+
+    // Iterate through the entries in the ZIP file
+    for index in 0..reader.file().entries().len() {
+        let entry = reader
+            .file()
+            .entries()
+            .get(index)
+            .ok_or(Error::NotFound("Entry not found".to_string()))?;
+
+        // Check if the current entry matches the target filename
+        if entry.filename().as_str().unwrap() == target_filename {
+            let mut entry_reader = reader.reader_without_entry(index).await?;
+            let mut contents = String::new();
+
+            // Read the contents of the entry into a string
+            entry_reader.read_to_string(&mut contents).await?;
+
+            return Ok(contents); // Return the contents of the specific text file
+        }
+    }
+
+    Err(Error::NotFound("Target file not found".to_string()))
+}
+
+
+pub async fn extract_specific_directory(
+    archive: &PathBuf,
+    target_directory: &str,
+    out_dir: &Path,
+) -> crate::Result<()> {
+    let archive = File::open(archive).await?;
+    let archive = BufReader::new(archive).compat();
+    let mut reader = ZipFileReader::new(archive).await?;
+
+    // Iterate through the entries in the ZIP file
+    for index in 0..reader.file().entries().len() {
+        let entry = reader
+            .file()
+            .entries()
+            .get(index)
+            .ok_or(Error::NotFound("Entry not found".to_string()))?;
+
+        // Check if the current entry matches the target directory
+        if entry.filename().as_str().unwrap().starts_with(target_directory) {
+            let path = out_dir.join(entry.filename().as_str()?);
+            let entry_is_dir = entry.dir()?;
+
+            let mut entry_reader = reader.reader_without_entry(index).await?;
+
+            if entry_is_dir {
+                // If the entry is a directory, create it if it doesn't exist
+                if !path.exists() {
+                    create_dir_all(&path).await?;
+                }
+            } else {
+                // Create parent directories if they don't exist
+                let parent = path
+                    .parent()
+                    .ok_or(Error::NotFound("Parent not found".to_string()))?;
+                if !parent.is_dir() {
+                    create_dir_all(parent).await?;
+                }
+
+                // Open the file for writing
+                let writer = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)
+                    .await?;
+
+                // Copy the contents of the entry to the file
+                futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+
+                // Optionally, manipulate the file's metadata here if needed
             }
         }
     }
 
-    if !dir_found {
-        return Err(crate::Error::NotFound(format!(
-            "Directory '{}' in the ZIP archive",
-            dir_name
-        )));
-    }
-
     Ok(())
-}
-
-pub async fn read_file_from_jar<P: AsRef<Path>>(
-    zip_path: &P,
-    file_name: &str,
-) -> crate::Result<String> {
-    let file = File::open(zip_path)?;
-    let mut archive = ZipArchive::new(file)?;
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        if file.name() == file_name {
-            let mut buffer = Vec::new();
-            file.read_to_end(&mut buffer)?;
-            return Ok(String::from_utf8(buffer)?);
-        }
-    }
-
-    Err(crate::Error::NotFound(format!(
-        "File '{}' in the ZIP archive",
-        file_name
-    )))
 }

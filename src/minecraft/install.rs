@@ -336,10 +336,7 @@ async fn execute_processors_if_exists(
             println!("{}", classpath);
 
             let main_class = read_file_from_jar(
-                &libraries_path
-                    .join(parse_lib_path(&processor.jar)?)
-                    .to_string_lossy()
-                    .into_owned(),
+                &libraries_path.join(parse_lib_path(&processor.jar)?),
                 "META-INF/MANIFEST.MF",
             )
             .await?
