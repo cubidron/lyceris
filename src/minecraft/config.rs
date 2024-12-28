@@ -18,12 +18,12 @@ pub enum Memory {
 #[derive(Serialize, Deserialize)]
 pub struct Config<T: Loader> {
     pub game_dir: PathBuf,
-    pub version: &'static str,
+    pub version: String,
     pub authentication: AuthMethod,
     pub memory: Option<Memory>,
-    pub version_name: Option<&'static str>,
+    pub version_name: Option<String>,
     pub loader: Option<T>,
-    pub java_version: Option<&'static str>,
+    pub java_version: Option<String>,
     pub runtime_dir: Option<PathBuf>,
     pub custom_java_args: Vec<String>,
     pub custom_args: Vec<String>,
@@ -32,12 +32,12 @@ pub struct Config<T: Loader> {
 #[derive(Serialize, Deserialize)]
 pub struct ConfigBuilder<T: Loader = ()> {
     game_dir: PathBuf,
-    version: &'static str,
+    version: String,
     authentication: AuthMethod,
     memory: Option<Memory>,
-    version_name: Option<&'static str>,
+    version_name: Option<String>,
     loader: Option<T>,
-    java_version: Option<&'static str>,
+    java_version: Option<String>,
     runtime_dir: Option<PathBuf>,
     custom_java_args: Vec<String>,
     custom_args: Vec<String>,
@@ -46,7 +46,7 @@ pub struct ConfigBuilder<T: Loader = ()> {
 impl ConfigBuilder<()> {
     pub fn new<T: AsRef<Path>>(
         game_dir: T,
-        version: &'static str,
+        version: String,
         authentication: AuthMethod,
     ) -> ConfigBuilder<()> {
         ConfigBuilder {
@@ -70,7 +70,7 @@ impl<T: Loader> ConfigBuilder<T> {
         self
     }
 
-    pub fn version_name(mut self, version_name: &'static str) -> Self {
+    pub fn version_name(mut self, version_name: String) -> Self {
         self.version_name = Some(version_name);
         self
     }
@@ -90,7 +90,7 @@ impl<T: Loader> ConfigBuilder<T> {
         }
     }
 
-    pub fn java_version(mut self, java_version: &'static str) -> Self {
+    pub fn java_version(mut self, java_version: String) -> Self {
         self.java_version = Some(java_version);
         self
     }
@@ -127,7 +127,7 @@ impl<T: Loader> ConfigBuilder<T> {
 }
 
 impl<T: Loader> Config<T> {
-    pub fn new(game_dir: PathBuf, version: &'static str, authentication: AuthMethod) -> Self {
+    pub fn new(game_dir: PathBuf, version: String, authentication: AuthMethod) -> Self {
         Self {
             game_dir,
             version,
@@ -143,14 +143,12 @@ impl<T: Loader> Config<T> {
     }
 
     pub fn get_version_name(&self) -> String {
-        self.version_name
-            .map(|name| name.to_owned())
-            .or_else(|| {
-                self.loader
-                    .as_ref()
-                    .map(|loader| format!("{}-{}", self.version, loader.get_version()))
-            })
-            .unwrap_or_else(|| self.version.to_string())
+        self.version_name.clone().unwrap_or_else(|| {
+            self.loader
+                .as_ref()
+                .map(|loader| format!("{}-{}", self.version, loader.get_version()))
+                .unwrap_or(self.version.clone())
+        })
     }
 
     pub fn get_libraries_path(&self) -> PathBuf {

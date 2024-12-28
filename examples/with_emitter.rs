@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let current_dir = env::current_dir()?;
     let config = ConfigBuilder::new(
         current_dir.join("game"),
-        "1.21.4",
+        "1.21.4".to_string(),
         lyceris::auth::AuthMethod::Offline {
             username: "Lyceris".to_string(),
             // If none given, it will be generated.
