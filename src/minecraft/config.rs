@@ -3,15 +3,19 @@ use std::path::{Path, PathBuf};
 #[cfg(not(target_os = "windows"))]
 use std::os::unix::fs::PermissionsExt;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{auth::AuthMethod, json::version::meta::vanilla::JavaVersion};
 
 use super::loader::Loader;
 
+#[derive(Serialize, Deserialize)]
 pub enum Memory {
     Megabyte(u64),
     Gigabyte(u16),
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Config<T: Loader> {
     pub game_dir: PathBuf,
     pub version: &'static str,
@@ -25,6 +29,7 @@ pub struct Config<T: Loader> {
     pub custom_args: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct ConfigBuilder<T: Loader = ()> {
     game_dir: PathBuf,
     version: &'static str,
