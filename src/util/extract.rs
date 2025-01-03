@@ -1,43 +1,55 @@
 use std::{
-    io::{Cursor, Read},
+    env::current_dir,
     path::{Path, PathBuf},
 };
 
+use async_zip::base::read::seek::ZipFileReader;
+use futures::AsyncReadExt;
 use tokio::{
-    fs::{self, File},
-    io::AsyncWriteExt,
-    task::block_in_place,
+    fs::{create_dir_all, File, OpenOptions},
+    io::BufReader,
 };
-use zip::ZipArchive;
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-pub async fn extract_file(jar_path: &PathBuf, output_dir: &PathBuf) -> crate::Result<()> {
-    // Read the JAR file into memory asynchronously
-    let jar_data = fs::read(jar_path).await?;
-    let cursor = Cursor::new(jar_data);
+use crate::error::Error;
 
-    let mut archive = block_in_place(|| ZipArchive::new(cursor))?;
+pub async fn extract_file(archive: &PathBuf, out_dir: &Path) -> crate::Result<()> {
+    let archive = File::open(archive).await?;
+    let archive = BufReader::new(archive).compat();
+    let mut reader = ZipFileReader::new(archive).await?;
+    for index in 0..reader.file().entries().len() {
+        let entry = reader
+            .file()
+            .entries()
+            .get(index)
+            .ok_or(Error::NotFound("Entry not found".to_string()))?;
+        let path = out_dir.join(entry.filename().as_str()?);
+        let entry_is_dir = entry.dir()?;
 
-    // Iterate through the files in the JAR
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let output_path = Path::new(output_dir).join(file.name());
+        let mut entry_reader = reader.reader_without_entry(index).await?;
 
-        // Create the output directory if it doesn't exist
-        if let Some(parent) = output_path.parent() {
-            fs::create_dir_all(parent).await?;
-        }
-
-        // Write the file to the output directory
-        let mut output_file = File::create(output_path).await?;
-
-        // Read the file in chunks and write asynchronously
-        let mut buffer = vec![0; 4096]; // 4 KB buffer
-        loop {
-            let n = tokio::task::block_in_place(|| file.read(&mut buffer))?;
-            if n == 0 {
-                break; // End of file
+        if entry_is_dir {
+            // The directory may have been created if iteration is out of order.
+            if !path.exists() {
+                create_dir_all(&path).await?;
             }
-            output_file.write_all(&buffer[..n]).await?;
+        } else {
+            // Creates parent directories. They may not exist if iteration is out of order
+            // or the archive does not contain directory entries.
+            let parent = path
+                .parent()
+                .ok_or(Error::NotFound("Parent not found".to_string()))?;
+            if !parent.is_dir() {
+                create_dir_all(parent).await?;
+            }
+            let writer = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .await?;
+            futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+
+            // Closes the file and manipulates its metadata here if you wish to preserve its metadata from the archive.
         }
     }
 
@@ -45,92 +57,143 @@ pub async fn extract_file(jar_path: &PathBuf, output_dir: &PathBuf) -> crate::Re
 }
 
 pub async fn extract_specific_file(
-    jar_path: &PathBuf,
-    file_name: &str,
-    output_dir: &PathBuf,
+    archive: &PathBuf,
+    target_filename: &str,
+    out_dir: &Path,
 ) -> crate::Result<()> {
-    let jar_data = fs::read(jar_path).await?;
-    let cursor = Cursor::new(jar_data);
+    let archive = File::open(archive).await?;
+    let archive = BufReader::new(archive).compat();
+    let mut reader = ZipFileReader::new(archive).await?;
 
-    let mut archive = block_in_place(|| ZipArchive::new(cursor))?;
+    // Iterate through the entries in the ZIP file
+    for index in 0..reader.file().entries().len() {
+        let entry = reader
+            .file()
+            .entries()
+            .get(index)
+            .ok_or(Error::NotFound("Entry not found".to_string()))?;
 
-    let mut file = archive.by_name(file_name)?;
-    let output_path = Path::new(output_dir).join(file_name);
+        // Check if the current entry matches the target filename
+        if entry.filename().as_str().unwrap() == target_filename {
+            let path = out_dir.join(entry.filename().as_str()?);
+            let entry_is_dir = entry.dir()?;
 
-    if let Some(parent) = output_path.parent() {
-        fs::create_dir_all(parent).await?;
-    }
+            let mut entry_reader = reader.reader_without_entry(index).await?;
 
-    let mut output_file = File::create(output_path).await?;
-    let mut buffer = vec![0; 4096];
+            if entry_is_dir {
+                // If the entry is a directory, create it if it doesn't exist
+                if !path.exists() {
+                    create_dir_all(&path).await?;
+                }
+            } else {
+                // Create parent directories if they don't exist
+                let parent = path
+                    .parent()
+                    .ok_or(Error::NotFound("Parent not found".to_string()))?;
+                if !parent.is_dir() {
+                    create_dir_all(parent).await?;
+                }
 
-    loop {
-        let n = tokio::task::block_in_place(|| file.read(&mut buffer))?;
-        if n == 0 {
-            break; // End of file
+                // Open the file for writing
+                let writer = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)
+                    .await?;
+
+                // Copy the contents of the entry to the file
+                futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+
+                // Optionally, manipulate the file's metadata here if needed
+            }
+            return Ok(()); // Exit after extracting the target file
         }
-        output_file.write_all(&buffer[..n]).await?;
     }
 
     Ok(())
 }
 
-pub async fn read_file_from_jar(jar_path: &PathBuf, file_name: &str) -> crate::Result<String> {
-    let jar_data = fs::read(jar_path).await?;
-    let cursor = Cursor::new(jar_data);
+pub async fn read_file_from_jar(
+    archive: &PathBuf,
+    target_filename: &str,
+) -> crate::Result<String> {
+    let archive = File::open(archive).await?;
+    let archive = BufReader::new(archive).compat();
+    let mut reader = ZipFileReader::new(archive).await?;
 
-    let mut archive = block_in_place(|| ZipArchive::new(cursor))?;
+    // Iterate through the entries in the ZIP file
+    for index in 0..reader.file().entries().len() {
+        let entry = reader
+            .file()
+            .entries()
+            .get(index)
+            .ok_or(Error::NotFound("Entry not found".to_string()))?;
 
-    let mut file = archive.by_name(file_name)?;
+        // Check if the current entry matches the target filename
+        if entry.filename().as_str().unwrap() == target_filename {
+            let mut entry_reader = reader.reader_without_entry(index).await?;
+            let mut contents = String::new();
 
-    let mut content = vec![];
-    let mut buffer = vec![0; 4096];
+            // Read the contents of the entry into a string
+            entry_reader.read_to_string(&mut contents).await?;
 
-    loop {
-        let n = tokio::task::block_in_place(|| file.read(&mut buffer))?;
-        if n == 0 {
-            break; // End of file
+            return Ok(contents); // Return the contents of the specific text file
         }
-        content.extend_from_slice(&buffer[..n]);
     }
 
-    Ok(String::from_utf8(content)?)
+    Err(Error::NotFound("Target file not found".to_string()))
 }
 
+
 pub async fn extract_specific_directory(
-    jar_path: &PathBuf,
-    dir_name: &str,
-    output_dir: &Path,
+    archive: &PathBuf,
+    target_directory: &str,
+    out_dir: &Path,
 ) -> crate::Result<()> {
-    let jar_data = fs::read(jar_path).await?;
-    let cursor = Cursor::new(jar_data);
+    let archive = File::open(archive).await?;
+    let archive = BufReader::new(archive).compat();
+    let mut reader = ZipFileReader::new(archive).await?;
 
-    let mut archive = block_in_place(|| ZipArchive::new(cursor))?;
+    // Iterate through the entries in the ZIP file
+    for index in 0..reader.file().entries().len() {
+        let entry = reader
+            .file()
+            .entries()
+            .get(index)
+            .ok_or(Error::NotFound("Entry not found".to_string()))?;
 
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let file_path = file.name();
+        // Check if the current entry matches the target directory
+        if entry.filename().as_str().unwrap().starts_with(target_directory) {
+            let path = out_dir.join(entry.filename().as_str()?);
+            let entry_is_dir = entry.dir()?;
 
-        // Check if the file path starts with the specified directory name
-        if file_path.starts_with(dir_name) {
-            let output_path = Path::new(output_dir).join(file_path);
+            let mut entry_reader = reader.reader_without_entry(index).await?;
 
-            // Create the output directory if it doesn't exist
-            if let Some(parent) = output_path.parent() {
-                fs::create_dir_all(parent).await?;
-            }
-
-            // Write the file to the output directory
-            let mut output_file = File::create(output_path).await?;
-            let mut buffer = vec![0; 4096]; // 4 KB buffer
-
-            // Read the file in chunks and write asynchronously
-            loop {
-                let n = tokio::task::block_in_place(|| file.read(&mut buffer))?;
-                if n == 0 {
-                    break; // End of file
+            if entry_is_dir {
+                // If the entry is a directory, create it if it doesn't exist
+                if !path.exists() {
+                    create_dir_all(&path).await?;
                 }
-                output_file.write_all(&buffer[..n]).await?;
+            } else {
+                // Create parent directories if they don't exist
+                let parent = path
+                    .parent()
+                    .ok_or(Error::NotFound("Parent not found".to_string()))?;
+                if !parent.is_dir() {
+                    create_dir_all(parent).await?;
+                }
+
+                // Open the file for writing
+                let writer = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)
+                    .await?;
+
+                // Copy the contents of the entry to the file
+                futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+
+                // Optionally, manipulate the file's metadata here if needed
             }
         }
     }
