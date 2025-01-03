@@ -29,7 +29,7 @@ pub enum Error {
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
-    Zip(#[from] async_zip::error::ZipError),
+    Zip(#[from] zip::result::ZipError),
     #[error(transparent)]
     Base64(#[from] base64::DecodeError),
     #[error(transparent)]
